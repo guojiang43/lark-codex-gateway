@@ -15,6 +15,12 @@ import {
   encodeExecutionThreadId,
   type HostDefinition,
 } from "./codex/host-routing-runtime.js";
+import {
+  DISPLAY_NAME_M4,
+  DISPLAY_NAME_MACBOOK,
+  HOST_ID_M4,
+  HOST_ID_MACBOOK,
+} from "./codex/host-constants.js";
 import { loadConfig } from "./config.js";
 import { FeishuAdapter, resetAttachmentRoot } from "./feishu/feishu-adapter.js";
 import { FeishuIngress } from "./feishu/feishu-ingress.js";
@@ -59,22 +65,22 @@ async function main(): Promise<void> {
     ),
   });
   const m4Runtime = new ManagedCodexRuntime({
-    displayName: "Gateway Mac",
+    displayName: DISPLAY_NAME_M4,
     connect: async () => {
       await verifyCodexContract(config.codexBin);
       return await connectAppServer({
         command: config.codexBin,
-        hostId: "m4",
+        hostId: HOST_ID_M4,
         approvals,
         permissions: config.codexPermissions,
       });
     },
-    onError: (error) => logRuntimeError("m4", error),
+    onError: (error) => logRuntimeError(HOST_ID_M4, error),
   });
   const managedRuntimes = [m4Runtime];
   const hosts: HostDefinition[] = [{
-    hostId: "m4",
-    displayName: "Gateway Mac",
+    hostId: HOST_ID_M4,
+    displayName: DISPLAY_NAME_M4,
     workspacePath: config.project.workspacePath,
     runtime: m4Runtime,
     status: () => ({ available: m4Runtime.available, detail: m4Runtime.detail }),
@@ -82,7 +88,7 @@ async function main(): Promise<void> {
   if (config.macbookWorker) {
     const worker = config.macbookWorker;
     const macbookRuntime = new ManagedCodexRuntime({
-      displayName: "Worker Mac",
+      displayName: DISPLAY_NAME_MACBOOK,
       connect: async () => {
         const remoteInput = {
           sshUser: worker.sshUser,
@@ -95,7 +101,7 @@ async function main(): Promise<void> {
             command: "/usr/bin/ssh",
             args: buildRemoteCodexProxyArgs(remoteInput),
             transport: "websocket",
-            hostId: "macbook",
+            hostId: HOST_ID_MACBOOK,
             approvals,
             permissions: config.codexPermissions,
           });
@@ -109,18 +115,18 @@ async function main(): Promise<void> {
           return await connectAppServer({
             command: "/usr/bin/ssh",
             args: buildRemoteCodexStdioArgs(remoteInput),
-            hostId: "macbook",
+            hostId: HOST_ID_MACBOOK,
             approvals,
             permissions: config.codexPermissions,
           });
         }
       },
-      onError: (error) => logRuntimeError("macbook", error),
+      onError: (error) => logRuntimeError(HOST_ID_MACBOOK, error),
     });
     managedRuntimes.push(macbookRuntime);
     hosts.push({
-      hostId: "macbook",
-      displayName: "Worker Mac",
+      hostId: HOST_ID_MACBOOK,
+      displayName: DISPLAY_NAME_MACBOOK,
       workspacePath: worker.workspacePath,
       runtime: macbookRuntime,
       status: () => ({ available: macbookRuntime.available, detail: macbookRuntime.detail }),
@@ -134,7 +140,7 @@ async function main(): Promise<void> {
   }
   await Promise.all(managedRuntimes.map((runtime) => runtime.start()));
   const codex = new HostRoutingCodexRuntime({
-    defaultHostId: "m4",
+    defaultHostId: HOST_ID_M4,
     hosts,
     onRefreshError: ({ hostId, threadId, error }) => process.stderr.write(`${JSON.stringify({
       level: "warn",

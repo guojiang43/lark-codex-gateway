@@ -4,6 +4,7 @@ import type { CodexRuntime } from "../gateway/gateway-service.js";
 import type { ProjectQueue } from "../queue/project-queue.js";
 import type { StateStore } from "../state/state-store.js";
 import type { ExecutionHostDirectory } from "../codex/host-routing-runtime.js";
+import { DISPLAY_NAME_M4 } from "../codex/host-constants.js";
 import {
   currentSessionCard,
   healthCard,
@@ -418,7 +419,7 @@ export class SessionController {
       codexStatus: this.#codexStatus(),
       ...(this.#executionHosts
         ? {
-            gatewayHostName: "M4",
+            gatewayHostName: DISPLAY_NAME_M4,
             currentExecutionHostId: currentHostId,
             executionHosts: this.#executionHosts.listHosts(),
           }
