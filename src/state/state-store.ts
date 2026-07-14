@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -224,16 +225,42 @@ export class StateStore {
   }
 
   upsertProject(project: ProjectInput): void {
-    this.#db
-      .prepare(`
+    const upsert = this.#db.prepare(`
         INSERT INTO projects(project_id, display_name, workspace_path, host_id)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(project_id) DO UPDATE SET
           display_name = excluded.display_name,
           workspace_path = excluded.workspace_path,
           host_id = excluded.host_id
-      `)
-      .run(project.projectId, project.displayName, project.workspacePath, project.hostId);
+      `);
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const workspaceOwner = this.#db
+        .prepare("SELECT project_id FROM projects WHERE workspace_path = ?")
+        .get(project.workspacePath) as { project_id: string } | undefined;
+      if (workspaceOwner && workspaceOwner.project_id !== project.projectId) {
+        const displacedProjectId = workspaceOwner.project_id;
+        const temporaryWorkspacePath = `${project.workspacePath}#reassigned-${randomUUID()}`;
+        this.#db
+          .prepare("UPDATE projects SET workspace_path = ? WHERE project_id = ?")
+          .run(temporaryWorkspacePath, displacedProjectId);
+        upsert.run(project.projectId, project.displayName, project.workspacePath, project.hostId);
+        this.#db
+          .prepare("UPDATE sessions SET project_id = ? WHERE project_id = ?")
+          .run(project.projectId, displacedProjectId);
+        this.#db.prepare("DELETE FROM projects WHERE project_id = ?").run(displacedProjectId);
+      } else {
+        upsert.run(project.projectId, project.displayName, project.workspacePath, project.hostId);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      try {
+        this.#db.exec("ROLLBACK");
+      } catch {
+        // Preserve the original failure if SQLite already ended the transaction.
+      }
+      throw error;
+    }
   }
 
   createSession(session: SessionInput): void {

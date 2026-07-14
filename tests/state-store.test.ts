@@ -221,4 +221,33 @@ describe("StateStore", () => {
     expect(store.isSessionBound("s1")).toBe(false);
     store.close();
   });
+
+  it("moves existing Sessions when a new project id takes over the same workspace", () => {
+    const dir = mkdtempSync(join(tmpdir(), "xiaowang-state-"));
+    const store = new StateStore(join(dir, "gateway.db"));
+    store.upsertProject({
+      projectId: "old-project",
+      displayName: "Old Project",
+      workspacePath: dir,
+      hostId: "old-host",
+    });
+    store.createSession({
+      sessionId: "existing-session",
+      codexThreadId: "existing-thread",
+      projectId: "old-project",
+      title: "Existing Session",
+      now: 1,
+    });
+
+    store.upsertProject({
+      projectId: "new-project",
+      displayName: "New Project",
+      workspacePath: dir,
+      hostId: "new-host",
+    });
+
+    expect(store.listSessions("old-project")).toEqual([]);
+    expect(store.listSessions("new-project").map((session) => session.sessionId)).toEqual(["existing-session"]);
+    store.close();
+  });
 });

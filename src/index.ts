@@ -31,6 +31,7 @@ import { SessionController } from "./session/session-controller.js";
 import { ApprovalController } from "./approval/approval-controller.js";
 import { recoverStartupState } from "./recovery/startup-recovery.js";
 import { verifyCodexContract } from "./codex/contract-check.js";
+import { writeStructuredLog } from "./structured-log.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -50,7 +51,7 @@ async function main(): Promise<void> {
   });
   const recovery = await recoverStartupState({ store, feishu, now: Date.now() });
   if (recovery.staleRunCount > 0 || recovery.expiredApprovalCount > 0 || recovery.errors.length > 0) {
-    process.stderr.write(`${JSON.stringify({ level: "warn", event: "startup_recovery", ...recovery })}\n`);
+    writeStructuredLog({ level: "warn", event: "startup_recovery", ...recovery });
   }
   const approvals = new ApprovalController({
     store,
@@ -60,9 +61,7 @@ async function main(): Promise<void> {
       ? { additionalWorkspacePaths: [config.macbookWorker.workspacePath] }
       : {}),
     allowedSenderId: config.allowedSenderId,
-    onError: (error) => process.stderr.write(
-      `${JSON.stringify({ level: "error", event: "approval_failed", message: error.message })}\n`,
-    ),
+    onError: (error) => writeStructuredLog({ level: "error", event: "approval_failed", message: error.message }),
   });
   const m4Runtime = new ManagedCodexRuntime({
     displayName: DISPLAY_NAME_M4,
@@ -106,12 +105,12 @@ async function main(): Promise<void> {
             permissions: config.codexPermissions,
           });
         } catch (error) {
-          process.stderr.write(`${JSON.stringify({
+          writeStructuredLog({
             level: "warn",
             event: "macbook_desktop_proxy_unavailable",
             message: error instanceof Error ? error.message : String(error),
             fallback: "standalone_stdio_with_desktop_refresh",
-          })}\n`);
+          });
           return await connectAppServer({
             command: "/usr/bin/ssh",
             args: buildRemoteCodexStdioArgs(remoteInput),
@@ -142,13 +141,13 @@ async function main(): Promise<void> {
   const codex = new HostRoutingCodexRuntime({
     defaultHostId: HOST_ID_M4,
     hosts,
-    onRefreshError: ({ hostId, threadId, error }) => process.stderr.write(`${JSON.stringify({
+    onRefreshError: ({ hostId, threadId, error }) => writeStructuredLog({
       level: "warn",
       event: "desktop_thread_refresh_failed",
       hostId,
       threadId,
       message: error.message,
-    })}\n`),
+    }),
   });
   const queue = new ProjectQueue();
   const gateway = new GatewayService({
@@ -162,9 +161,7 @@ async function main(): Promise<void> {
     projectDisplayName: config.project.displayName,
     workspacePath: config.project.workspacePath,
     allowedSenderId: config.allowedSenderId,
-    onError: (error) => process.stderr.write(
-      `${JSON.stringify({ level: "error", event: "gateway_run_failed", message: error.message })}\n`,
-    ),
+    onError: (error) => writeStructuredLog({ level: "error", event: "gateway_run_failed", message: error.message }),
   });
   const sessions = new SessionController({
     store,
@@ -180,9 +177,7 @@ async function main(): Promise<void> {
       .map((host) => `${host.displayName}：${host.available ? "已连接" : host.detail}`)
       .join("；"),
     executionHosts: codex,
-    onError: (error) => process.stderr.write(
-      `${JSON.stringify({ level: "error", event: "session_action_failed", message: error.message })}\n`,
-    ),
+    onError: (error) => writeStructuredLog({ level: "error", event: "session_action_failed", message: error.message }),
   });
   const ingress = new FeishuIngress({
     appId: config.feishuAppId,
@@ -190,15 +185,15 @@ async function main(): Promise<void> {
     gateway,
     sessions,
     approvals,
-    onReady: () => process.stderr.write(`${JSON.stringify({ level: "info", event: "feishu_ws_ready" })}\n`),
-    onError: (error) => process.stderr.write(`${JSON.stringify({ level: "error", event: "feishu_ws_error", message: error.message })}\n`),
+    onReady: () => writeStructuredLog({ level: "info", event: "feishu_ws_ready" }),
+    onError: (error) => writeStructuredLog({ level: "error", event: "feishu_ws_error", message: error.message }),
   });
 
   let stopping = false;
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
-    process.stderr.write(`${JSON.stringify({ level: "info", event: "shutdown", signal })}\n`);
+    writeStructuredLog({ level: "info", event: "shutdown", signal });
     ingress.close();
     await Promise.all(managedRuntimes.map((runtime) => runtime.stop()));
     store.close();
@@ -251,16 +246,16 @@ async function connectAppServer(input: {
 }
 
 function logRuntimeError(hostId: string, error: Error): void {
-  process.stderr.write(`${JSON.stringify({
+  writeStructuredLog({
     level: "error",
     event: "codex_host_unavailable",
     hostId,
     message: error.message,
-  })}\n`);
+  });
 }
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${JSON.stringify({ level: "fatal", event: "startup_failed", message })}\n`);
+  writeStructuredLog({ level: "fatal", event: "startup_failed", message });
   process.exitCode = 1;
 });
