@@ -192,6 +192,24 @@ describe("UnavailableCodexRuntime", () => {
     await client.close();
   });
 
+  it("replaces a persisted thread that Codex has already archived", async () => {
+    const archivedThreadId = "019f59a4-9206-7241-a285-3b1ef9c56fcc";
+    const client = {
+      resumeThread: async () => {
+        throw new AppServerRequestError("thread/resume", {
+          message: `session ${archivedThreadId} is archived. Run \`codex unarchive ${archivedThreadId}\` to unarchive it first.`,
+        });
+      },
+      startThread: async () => "replacement-thread",
+    } as unknown as AppServerClient;
+    const runtime = new AppServerCodexRuntime(client);
+
+    await expect(runtime.resumeSession({
+      threadId: archivedThreadId,
+      workspacePath: process.cwd(),
+    })).resolves.toBe("replacement-thread");
+  });
+
   it("keeps the gateway responsive but refuses execution without fake streaming or approvals", async () => {
     const runtime = new UnavailableCodexRuntime();
     const threadId = await runtime.startSession({ workspacePath: process.cwd() });

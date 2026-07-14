@@ -52,7 +52,7 @@ export class AppServerCodexRuntime implements CodexRuntime {
         approvalPolicy: this.#permissions.approvalPolicy,
       });
     } catch (error) {
-      if (isMissingThreadError(error)) {
+      if (isMissingThreadError(error) || isArchivedThreadError(error)) {
         return this.startSession({
           workspacePath: input.workspacePath,
           ...(input.readOnly !== undefined ? { readOnly: input.readOnly } : {}),
@@ -143,6 +143,13 @@ function isMissingThreadError(error: unknown): boolean {
   if (!(error instanceof AppServerRequestError)) return false;
   if (error.serverMessage.startsWith("no rollout found for thread id ")) return true;
   return error.code === -32600 && error.serverMessage.startsWith("thread not loaded:");
+}
+
+function isArchivedThreadError(error: unknown): boolean {
+  if (!(error instanceof AppServerRequestError)) return false;
+  const archived = /^session (\S+) is archived\. Run `codex unarchive (\S+)` to unarchive it first\.$/
+    .exec(error.serverMessage);
+  return archived !== null && archived[1] === archived[2];
 }
 
 export class UnavailableCodexRuntime implements CodexRuntime {
