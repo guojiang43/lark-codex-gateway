@@ -1,0 +1,35 @@
+Port 19022
+ListenAddress 127.0.0.1
+AddressFamily inet
+
+HostKey __CONFIG_DIR__/ssh_host_ed25519_key
+PidFile __CONFIG_DIR__/sshd.pid
+AuthorizedKeysFile __CONFIG_DIR__/authorized_keys
+
+AllowUsers __USER__
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+PermitRootLogin no
+PermitEmptyPasswords no
+StrictModes yes
+
+PermitTTY no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+
+ClientAliveInterval 30
+ClientAliveCountMax 2
+LoginGraceTime 20
+MaxAuthTries 3
+MaxSessions 4
+LogLevel VERBOSE
+
+Subsystem sftp internal-sftp

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lark-codex-worker-sshd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/sbin/sshd</string>
+    <string>-D</string>
+    <string>-e</string>
+    <string>-f</string>
+    <string>__SSHD_CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__HOME__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>__CONFIG_DIR__/sshd.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>__CONFIG_DIR__/sshd.stderr.log</string>
+</dict>
+</plist>

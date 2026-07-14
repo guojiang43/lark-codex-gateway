@@ -1,0 +1,56 @@
+# Copy this file outside Git and replace placeholders.
+# Never add App Secret, tokens, passwords, private keys, or Codex auth state.
+
+deployment:
+  mode: dual # single | dual
+  desktop_realtime_required: true
+  remote_attachments_required: false
+
+repository:
+  path: /absolute/path/to/lark-codex-gateway
+  expected_branch: main
+
+feishu:
+  app_id: cli_REPLACE_ME
+  allowed_open_id: ou_REPLACE_ME
+  backend_published: false
+  secret_installation: user_interactive_keychain
+  single_chat_only: true
+
+gateway_host:
+  connection: local # local | SSH alias
+  repo_path: /absolute/path/to/lark-codex-gateway
+  workspace_path: /absolute/path/to/workspace
+  project_id: stable-project-id
+  project_name: Project Display Name
+  host_id: gateway-mac
+  launch_agent_label: com.lark-codex-gateway
+  codex_bin: /Users/REPLACE_ME/.local/bin/codex
+
+worker_host:
+  enabled: true
+  connection: worker-mac-ssh-alias
+  workspace_path: /absolute/path/on/worker
+  ssh_user: REPLACE_ME
+  reverse_host: 127.0.0.1
+  reverse_port: 19022
+  codex_bin: /Users/REPLACE_ME/.local/bin/codex
+  gateway_ssh_alias_from_worker: gateway-mac-ssh-alias
+
+authorization:
+  may_patch_repository_for_portability: true
+  may_install_node_dependencies: true
+  may_install_codex_standalone: false
+  may_install_launch_agents: false
+  may_restart_gateway_when_idle: false
+  may_restart_codex_desktop: false
+  may_change_feishu_backend: false
+  may_publish_feishu_version: false
+
+acceptance:
+  test_chat: bot_p2p
+  expected_workspace: /absolute/path/on-selected-execution-host
+  require_reaction_cleanup: true
+  require_streaming_card: true
+  require_final_only_card: true
+  require_same_desktop_thread: true
