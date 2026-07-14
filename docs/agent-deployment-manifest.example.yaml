@@ -4,6 +4,7 @@
 deployment:
   mode: dual # single | dual
   desktop_realtime_required: true
+  desktop_connection: explicit_loopback_proxy # explicit_loopback_proxy | daemon_autodetect | none
   remote_attachments_required: false
 
 repository:

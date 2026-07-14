@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lark-codex-desktop-proxy</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE_BIN__</string>
+    <string>__DAEMON_PROXY_ENTRYPOINT__</string>
+    <string>--port</string>
+    <string>48123</string>
+    <string>--token-file</string>
+    <string>__TOKEN_FILE__</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>__CONFIG_DIR__/desktop-proxy.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>__CONFIG_DIR__/desktop-proxy.stderr.log</string>
+</dict>
+</plist>

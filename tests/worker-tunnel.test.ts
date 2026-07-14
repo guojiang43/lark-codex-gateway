@@ -46,4 +46,38 @@ describe("MacBook worker SSH tunnel packaging", () => {
       expect(content).not.toContain("PRIVATE KEY");
     }
   });
+
+  it("packages a persistent loopback-only Desktop daemon bridge", () => {
+    const installer = readFileSync(
+      new URL("../scripts/install-desktop-daemon-proxy.zsh", import.meta.url),
+      "utf8",
+    );
+    const proxyPlist = readFileSync(
+      new URL("../deploy/com.lark-codex-desktop-proxy.plist", import.meta.url),
+      "utf8",
+    );
+    const envPlist = readFileSync(
+      new URL("../deploy/com.lark-codex-desktop-proxy-env.plist", import.meta.url),
+      "utf8",
+    );
+    const uninstaller = readFileSync(
+      new URL("../scripts/uninstall-desktop-daemon-proxy.zsh", import.meta.url),
+      "utf8",
+    );
+
+    expect(installer).toContain("CODEX_APP_SERVER_WS_URL");
+    expect(installer).toContain("ws://127.0.0.1:48123/${PATH_TOKEN}");
+    expect(proxyPlist).toContain("<key>KeepAlive</key>");
+    expect(proxyPlist).toContain("__DAEMON_PROXY_ENTRYPOINT__");
+    expect(envPlist).toContain("CODEX_APP_SERVER_WS_URL");
+    expect(installer).toContain("daemon-loopback-proxy.js");
+    expect(installer).toContain("desktop-proxy-token");
+    expect(proxyPlist).toContain("__TOKEN_FILE__");
+    expect(uninstaller).toContain("unsetenv CODEX_APP_SERVER_WS_URL");
+    for (const content of [installer, proxyPlist, envPlist]) {
+      expect(content).not.toContain("FEISHU_APP_SECRET");
+      expect(content).not.toContain("PRIVATE KEY");
+      expect(content).not.toContain("0.0.0.0");
+    }
+  });
 });

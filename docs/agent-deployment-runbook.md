@@ -321,13 +321,29 @@ Required evidence:
 
 ## 13. Phase 7 — Desktop shared-control gate
 
-The currently verified Desktop build reads this internal variable at startup:
+The currently verified Desktop build can discover the managed daemon through this internal variable at startup:
 
 ```bash
 launchctl setenv CODEX_APP_SERVER_USE_LOCAL_DAEMON 1
 ```
 
-Persist it with a user LaunchAgent that runs the same command at login. Do not put secrets in that plist.
+That discovery path runs a short-lived daemon version probe. A transient probe timeout silently selects an isolated stdio app-server for the entire Desktop process. Killing only that child process does not rerun the transport selection; a complete Desktop restart is required. Therefore, `daemon_autodetect` is diagnostic fallback, not the recommended production mode when realtime visibility is required.
+
+For realtime-required deployments, install the explicit loopback bridge after `npm run build`:
+
+```bash
+./scripts/install-desktop-daemon-proxy.zsh
+```
+
+It binds `127.0.0.1:48123` only, validates a per-machine random path token stored in a 0600 file, forwards authorized WebSocket traffic to `~/.codex/app-server-control/app-server-control.sock`, and persists the protected `CODEX_APP_SERVER_WS_URL` through a mode-0600 user LaunchAgent. The token is local access-control material: never print or commit it. The installer copies its standalone built entrypoint into the 0700 worker config directory so the service does not depend on a disposable worktree.
+
+After installation, completely quit and reopen Desktop, then run:
+
+```bash
+./scripts/check-desktop-daemon-proxy.zsh
+```
+
+The check must report `desktop_realtime=healthy`, Desktop must have no child `app-server --stdio`, and `lsof -U` must show both Desktop and the worker proxy connected to the managed daemon socket.
 
 This variable is not a documented stable Codex setting. The agent must:
 
@@ -394,8 +410,7 @@ launchctl bootout gui/$(id -u)/<gateway-label>
 Desktop daemon preference:
 
 ```bash
-launchctl unsetenv CODEX_APP_SERVER_USE_LOCAL_DAEMON
-launchctl bootout gui/$(id -u)/<desktop-daemon-env-label>
+./scripts/uninstall-desktop-daemon-proxy.zsh
 ```
 
 Managed daemon, only when no client needs it:

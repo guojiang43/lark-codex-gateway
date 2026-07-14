@@ -138,7 +138,7 @@ npm run build
 
 网关按目标 workspace 的绝对 `cwd` 从 Codex `thread/list` 同步 session，并同时核对 Codex 的归档列表；已归档且没有活动 run 的 session 不再出现在切换列表中。thread ID 归属于执行主机；两台 Mac 的本地 session 不会被伪装成同一个 session。跨机器继续工作应同步 project 文件并做显式 handoff，不应复制整个 `~/.codex`。
 
-Codex Desktop 是否立即显示外部 turn，取决于 Desktop 与网关是否连接同一个 managed app-server daemon。完整的单/双机部署、验证和回滚流程见 [Agent Deployment Runbook](docs/agent-deployment-runbook.md)。
+Codex Desktop 是否立即显示外部 turn，取决于 Desktop 与网关是否连接同一个 managed app-server daemon。实时同步部署使用 loopback-only WebSocket bridge 显式连接该 daemon，避免 Desktop 启动探测瞬时失败后静默降级到独立 stdio。完整的安装、验证和回滚流程见 [Agent Deployment Runbook](docs/agent-deployment-runbook.md)。
 
 ## 开发与验证
 
