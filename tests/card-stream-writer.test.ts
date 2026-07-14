@@ -7,19 +7,28 @@ class FakePagedFeishu implements FeishuPort {
   readonly updates: Array<{ cardId: string; content: string; sequence: number }> = [];
   readonly finishes: Array<{ cardId: string; content: string; sequence: number; status: string }> = [];
   readonly created: string[] = [];
+  readonly titles: string[] = [];
 
   async addReaction(): Promise<string> { return "reaction"; }
   async removeReaction(): Promise<void> {}
   async sendRichFallback(): Promise<void> {}
   async downloadAttachment(): Promise<never> { throw new Error("unused"); }
-  async createAnswerCard(chatId: string): Promise<string> {
+  async createAnswerCard(chatId: string, title?: string): Promise<string> {
     this.created.push(chatId);
+    this.titles.push(title ?? "");
     return `card-${this.created.length + 1}`;
   }
   async updateAnswerCard(cardId: string, content: string, sequence: number): Promise<void> {
     this.updates.push({ cardId, content, sequence });
   }
-  async finishAnswerCard(cardId: string, content: string, sequence: number, status: string): Promise<void> {
+  async finishAnswerCard(
+    cardId: string,
+    content: string,
+    sequence: number,
+    status: string,
+    title?: string,
+  ): Promise<void> {
+    this.titles.push(title ?? "");
     this.finishes.push({ cardId, content, sequence, status });
   }
 }
@@ -42,6 +51,7 @@ describe("CardStreamWriter pagination", () => {
     const feishu = new FakePagedFeishu();
     const writer = new CardStreamWriter(feishu, "card-1", 100, {
       chatId: "chat-1",
+      title: "Lark Codex · 会话 A",
       maxPageBytes: 12,
     });
 
@@ -49,6 +59,7 @@ describe("CardStreamWriter pagination", () => {
     await writer.finish("completed");
 
     expect(feishu.created).toEqual(["chat-1"]);
+    expect(feishu.titles.every((title) => title === "Lark Codex · 会话 A")).toBe(true);
     expect(feishu.updates.map((update) => update.content)).toEqual(["你好世界", "ABCDE"]);
     expect(feishu.updates.every((update) => Buffer.byteLength(update.content, "utf8") <= 12)).toBe(true);
     expect(feishu.finishes.map((finish) => finish.cardId)).toEqual(["card-1", "card-2"]);

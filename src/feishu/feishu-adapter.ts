@@ -59,8 +59,8 @@ export class FeishuAdapter implements FeishuPort {
     assertSuccess(response);
   }
 
-  async createAnswerCard(chatId: string): Promise<string> {
-    const card = buildAnswerCard();
+  async createAnswerCard(chatId: string, title?: string): Promise<string> {
+    const card = buildAnswerCard(title);
     const { cardId } = await this.sendCard(chatId, card);
     return cardId;
   }
@@ -98,8 +98,14 @@ export class FeishuAdapter implements FeishuPort {
     assertSuccess(response);
   }
 
-  async finishAnswerCard(cardId: string, content: string, sequence: number, status: string): Promise<void> {
-    const card = buildFinalAnswerCard(content, status);
+  async finishAnswerCard(
+    cardId: string,
+    content: string,
+    sequence: number,
+    status: string,
+    title?: string,
+  ): Promise<void> {
+    const card = buildFinalAnswerCard(content, status, title);
     const response = (await this.client.request({
       method: "PUT",
       url: `/open-apis/cardkit/v1/cards/${encodeURIComponent(cardId)}`,
@@ -190,7 +196,7 @@ export async function resetAttachmentRoot(root: string): Promise<void> {
   await chmod(normalized, 0o700);
 }
 
-export function buildAnswerCard(): Record<string, unknown> {
+export function buildAnswerCard(title = "Codex"): Record<string, unknown> {
   const button = (
     label: string,
     elementId: string,
@@ -207,13 +213,13 @@ export function buildAnswerCard(): Record<string, unknown> {
   return {
     schema: "2.0",
     header: {
-      title: { tag: "plain_text", content: "Codex" },
+      title: { tag: "plain_text", content: title },
       subtitle: { tag: "plain_text", content: "正在处理" },
     },
     config: {
       streaming_mode: true,
       update_multi: true,
-      summary: { content: "Codex 正在处理你的任务" },
+      summary: { content: `${title} 正在处理你的任务` },
       streaming_config: {
         print_frequency_ms: { default: 70, android: 70, ios: 70, pc: 70 },
         print_step: { default: 1, android: 1, ios: 1, pc: 1 },
@@ -229,19 +235,23 @@ export function buildAnswerCard(): Record<string, unknown> {
   };
 }
 
-export function buildFinalAnswerCard(content: string, status: string): Record<string, unknown> {
+export function buildFinalAnswerCard(
+  content: string,
+  status: string,
+  title = "Codex",
+): Record<string, unknown> {
   const presentation = finalStatusPresentation(status);
   return {
     schema: "2.0",
     header: {
       template: presentation.template,
-      title: { tag: "plain_text", content: "Codex" },
+      title: { tag: "plain_text", content: title },
       subtitle: { tag: "plain_text", content: presentation.label },
     },
     config: {
       streaming_mode: false,
       update_multi: true,
-      summary: { content: `Codex · ${presentation.label}` },
+      summary: { content: `${title} · ${presentation.label}` },
     },
     body: {
       elements: [

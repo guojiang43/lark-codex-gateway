@@ -11,6 +11,7 @@ export class CardStreamWriter {
   readonly #feishu: FeishuPort;
   readonly #intervalMs: number;
   readonly #chatId: string | undefined;
+  readonly #title: string | undefined;
   readonly #maxPageBytes: number;
   readonly #onCardCreated: ((cardId: string) => void) | undefined;
   readonly #onCardEvent:
@@ -27,6 +28,7 @@ export class CardStreamWriter {
     intervalMs: number,
     options: {
       chatId?: string;
+      title?: string;
       maxPageBytes?: number;
       onCardCreated?: (cardId: string) => void;
       onCardEvent?: (event: {
@@ -40,6 +42,7 @@ export class CardStreamWriter {
     this.#feishu = feishu;
     this.#intervalMs = Math.max(intervalMs, 100);
     this.#chatId = options.chatId;
+    this.#title = options.title;
     this.#maxPageBytes = Math.max(1, options.maxPageBytes ?? 22_000);
     this.#onCardCreated = options.onCardCreated;
     this.#onCardEvent = options.onCardEvent;
@@ -85,6 +88,7 @@ export class CardStreamWriter {
         card.sentContent,
         card.sequence,
         status,
+        this.#title,
       );
       this.#onCardEvent?.({
         cardId: card.cardId,
@@ -113,6 +117,7 @@ export class CardStreamWriter {
             previous.sentContent,
             previous.sequence,
             "continued",
+            this.#title,
           );
           this.#onCardEvent?.({
             cardId: previous.cardId,
@@ -123,7 +128,7 @@ export class CardStreamWriter {
           previous.closed = true;
         }
         if (!this.#chatId) throw new Error("chatId is required for continuation cards");
-        const cardId = await this.#feishu.createAnswerCard(this.#chatId);
+        const cardId = await this.#feishu.createAnswerCard(this.#chatId, this.#title);
         this.#onCardCreated?.(cardId);
         this.#cards.push({ cardId, sequence: 0, sentContent: "", closed: false });
       }

@@ -4,9 +4,11 @@ import { buildAnswerCard, buildFinalAnswerCard } from "../src/feishu/feishu-adap
 
 describe("buildAnswerCard", () => {
   it("uses Card 2.0 streaming markdown with only the run-time stop control", () => {
-    const json = JSON.stringify(buildAnswerCard());
+    const json = JSON.stringify(buildAnswerCard("Lark Codex · 会话 A"));
 
     expect(json).toContain('"schema":"2.0"');
+    expect(json).toContain("Lark Codex · 会话 A");
+    expect(json).not.toContain('"content":"Codex"');
     expect(json).toContain('"streaming_mode":true');
     expect(json).toContain('"element_id":"answer"');
     expect(json).toContain('"action":"run.stop"');
@@ -14,9 +16,15 @@ describe("buildAnswerCard", () => {
   });
 
   it("renders a final status card without stale run or session controls", () => {
-    const json = JSON.stringify(buildFinalAnswerCard("收到，测试正常。", "completed"));
+    const json = JSON.stringify(buildFinalAnswerCard(
+      "收到，测试正常。",
+      "completed",
+      "Lark Codex · 会话 A",
+    ));
 
     expect(json).toContain('"streaming_mode":false');
+    expect(json).toContain("Lark Codex · 会话 A");
+    expect(json).not.toContain('"content":"Codex"');
     expect(json).toContain("已完成");
     expect(json).toContain("收到，测试正常。");
     expect(json).not.toContain('"action":"run.stop"');

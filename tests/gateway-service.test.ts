@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  formatAnswerCardTitle,
   GatewayService,
   type CodexDeltaMetadata,
   type CodexRuntime,
@@ -22,6 +23,7 @@ class FakeFeishu implements FeishuPort {
   readonly events: string[] = [];
   readonly updates: Array<{ cardId: string; content: string; sequence: number }> = [];
   readonly fallbacks: Array<{ chatId: string; title: string; content: string }> = [];
+  readonly answerCardTitles: string[] = [];
   failCardCreation = false;
 
   async addReaction(messageId: string): Promise<string> {
@@ -33,8 +35,9 @@ class FakeFeishu implements FeishuPort {
     this.events.push(`reaction:remove:${messageId}:${reactionId}`);
   }
 
-  async createAnswerCard(chatId: string): Promise<string> {
+  async createAnswerCard(chatId: string, title?: string): Promise<string> {
     if (this.failCardCreation) throw new Error("CardKit unavailable");
+    this.answerCardTitles.push(title ?? "");
     this.events.push(`card:create:${chatId}`);
     return "card-1";
   }
@@ -48,7 +51,14 @@ class FakeFeishu implements FeishuPort {
     this.updates.push({ cardId, content, sequence });
   }
 
-  async finishAnswerCard(cardId: string, content: string, sequence: number, status: string): Promise<void> {
+  async finishAnswerCard(
+    cardId: string,
+    content: string,
+    sequence: number,
+    status: string,
+    title?: string,
+  ): Promise<void> {
+    this.answerCardTitles.push(title ?? "");
     this.events.push(`card:finish:${status}:${sequence}`);
     this.updates.push({ cardId, content, sequence });
   }
@@ -181,6 +191,11 @@ const message = {
 };
 
 describe("GatewayService", () => {
+  it("formats answer-card titles as Project · Session without duplicating legacy project prefixes", () => {
+    expect(formatAnswerCardTitle("P", "默认任务")).toBe("P · 默认任务");
+    expect(formatAnswerCardTitle("P", "P · 默认任务")).toBe("P · 默认任务");
+  });
+
   it("separates commentary paragraphs and keeps only the final answer when the turn completes", async () => {
     const { gateway, codex, feishu, store } = fixture();
     codex.phasedOutput = true;
@@ -223,6 +238,7 @@ describe("GatewayService", () => {
 
     expect(result.kind).toBe("completed");
     expect(feishu.updates.at(-1)?.content).toBe("第一段，第二段");
+    expect(feishu.answerCardTitles).toEqual(["P · 默认任务", "P · 默认任务"]);
     expect(feishu.events[0]).toBe("reaction:add:message-1");
     expect(feishu.events.at(-1)).toBe("reaction:remove:message-1:reaction-1");
     expect(store.getRun(result.runId ?? "")?.state).toBe("COMPLETED");
@@ -353,7 +369,7 @@ describe("GatewayService", () => {
     expect(result.kind).toBe("failed");
     expect(feishu.fallbacks).toEqual([{
       chatId: "chat-1",
-      title: "Codex · 卡片降级",
+      title: "P · 默认任务 · 卡片降级",
       content: "任务执行失败，请稍后重试。",
     }]);
     expect(feishu.events.at(-1)).toBe("reaction:remove:message-1:reaction-1");

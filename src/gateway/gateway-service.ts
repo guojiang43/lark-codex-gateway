@@ -42,9 +42,15 @@ export interface DownloadedAttachment {
 export interface FeishuPort {
   addReaction(messageId: string): Promise<string>;
   removeReaction(messageId: string, reactionId: string): Promise<void>;
-  createAnswerCard(chatId: string): Promise<string>;
+  createAnswerCard(chatId: string, title?: string): Promise<string>;
   updateAnswerCard(cardId: string, content: string, sequence: number): Promise<void>;
-  finishAnswerCard(cardId: string, content: string, sequence: number, status: string): Promise<void>;
+  finishAnswerCard(
+    cardId: string,
+    content: string,
+    sequence: number,
+    status: string,
+    title?: string,
+  ): Promise<void>;
   sendRichFallback(chatId: string, title: string, content: string): Promise<void>;
   downloadAttachment(messageId: string, attachment: InboundAttachment): Promise<DownloadedAttachment>;
 }
@@ -163,20 +169,33 @@ export class GatewayService {
     });
 
     return this.#queue.run(this.#projectId, async () =>
-      this.#executeRun(runId, session.sessionId, session.codexThreadId, session.mode, message),
+      this.#executeRun(
+        runId,
+        session.sessionId,
+        session.codexThreadId,
+        session.title,
+        session.mode,
+        message,
+      ),
     );
   }
 
   async #ensureSession(scopeKey: string): Promise<{
     sessionId: string;
     codexThreadId: string;
+    title: string;
     mode: "write" | "read_only";
   }> {
     const activeSessionId = this.#store.getActiveSessionId(scopeKey);
     if (activeSessionId) {
       const active = this.#store.getSession(activeSessionId);
       if (active && active.status === "ACTIVE") {
-        return { sessionId: active.sessionId, codexThreadId: active.codexThreadId, mode: active.mode };
+        return {
+          sessionId: active.sessionId,
+          codexThreadId: active.codexThreadId,
+          title: active.title,
+          mode: active.mode,
+        };
       }
     }
 
@@ -191,16 +210,23 @@ export class GatewayService {
       now,
     });
     this.#store.bindScope(scopeKey, sessionId, now);
-    return { sessionId, codexThreadId, mode: "write" };
+    return {
+      sessionId,
+      codexThreadId,
+      title: `${this.#projectDisplayName} · 默认任务`,
+      mode: "write",
+    };
   }
 
   async #executeRun(
     runId: string,
     sessionId: string,
     initialThreadId: string,
+    sessionTitle: string,
     mode: "write" | "read_only",
     message: InboundMessage,
   ): Promise<HandleResult> {
+    const answerCardTitle = formatAnswerCardTitle(this.#projectDisplayName, sessionTitle);
     let threadId = initialThreadId;
     let reactionId: string | undefined;
     let stream: CardStreamWriter | undefined;
@@ -214,11 +240,12 @@ export class GatewayService {
         now: this.#now(),
       });
 
-      const cardId = await this.#feishu.createAnswerCard(message.chatId);
+      const cardId = await this.#feishu.createAnswerCard(message.chatId, answerCardTitle);
       this.#store.attachCard(runId, cardId, this.#now());
       this.#store.transitionRun(runId, "RUNNING", this.#now());
       stream = new CardStreamWriter(this.#feishu, cardId, this.#streamIntervalMs, {
         chatId: message.chatId,
+        title: answerCardTitle,
         onCardCreated: (continuationCardId) =>
           this.#store.attachRunCard(runId, continuationCardId, this.#now()),
         onCardEvent: (event) => this.#store.recordRunCardEvent({
@@ -331,7 +358,7 @@ export class GatewayService {
         try {
           await this.#feishu.sendRichFallback(
             message.chatId,
-            "Codex · 卡片降级",
+            `${answerCardTitle} · 卡片降级`,
             stream?.content || "任务执行失败，请稍后重试。",
           );
         } catch {
@@ -358,6 +385,13 @@ export class GatewayService {
       }
     }
   }
+}
+
+export function formatAnswerCardTitle(projectName: string, sessionName: string): string {
+  const project = projectName.trim() || "Codex";
+  const session = sessionName.trim();
+  if (!session || session === project || session.startsWith(`${project} · `)) return session || project;
+  return `${project} · ${session}`;
 }
 
 function createCardDeltaHandler(stream: CardStreamWriter): (
