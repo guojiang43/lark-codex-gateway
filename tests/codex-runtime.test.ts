@@ -1,5 +1,7 @@
 import { fileURLToPath } from "node:url";
+import { once } from "node:events";
 import { describe, expect, it } from "vitest";
+import { WebSocketServer } from "ws";
 
 import {
   AppServerCodexRuntime,
@@ -19,6 +21,88 @@ class HealthyRuntime implements CodexRuntime {
 }
 
 describe("UnavailableCodexRuntime", () => {
+  it("applies the configured full-access no-approval policy to write Sessions", async () => {
+    const calls: Array<{ method: string; input: Record<string, unknown> }> = [];
+    const client = {
+      startThread: async (input: Record<string, unknown>) => {
+        calls.push({ method: "start", input });
+        return "thread-start";
+      },
+      forkThread: async (input: Record<string, unknown>) => {
+        calls.push({ method: "fork", input });
+        return "thread-fork";
+      },
+      resumeThread: async (input: Record<string, unknown>) => {
+        calls.push({ method: "resume", input });
+        return String(input.threadId);
+      },
+    } as unknown as AppServerClient;
+    const runtime = new AppServerCodexRuntime(client, {
+      sandbox: "danger-full-access",
+      approvalPolicy: "never",
+    });
+
+    await runtime.startSession({ workspacePath: "/work" });
+    await runtime.forkSession({ threadId: "thread-1", workspacePath: "/work" });
+    await runtime.resumeSession({ threadId: "thread-1", workspacePath: "/work" });
+
+    expect(calls).toEqual([
+      expect.objectContaining({ method: "start", input: expect.objectContaining({ sandbox: "danger-full-access", approvalPolicy: "never" }) }),
+      expect.objectContaining({ method: "fork", input: expect.objectContaining({ sandbox: "danger-full-access", approvalPolicy: "never" }) }),
+      expect.objectContaining({ method: "resume", input: expect.objectContaining({ sandbox: "danger-full-access", approvalPolicy: "never" }) }),
+    ]);
+  });
+
+  it("paginates the complete archived thread list", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const address = server.address();
+    if (typeof address === "string" || address === null) throw new Error("missing WebSocket test address");
+    server.on("connection", (socket) => {
+      socket.on("message", (data) => {
+        const message = JSON.parse(String(data));
+        if (message.method === "initialize") {
+          socket.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { userAgent: "mock-daemon" } }));
+        } else if (message.method === "thread/list") {
+          requests.push(message.params);
+          const secondPage = message.params.cursor === "page-2";
+          socket.send(JSON.stringify({
+            jsonrpc: "2.0",
+            id: message.id,
+            result: {
+              data: [{
+                id: secondPage ? "archived-2" : "archived-1",
+                name: secondPage ? "归档 2" : "归档 1",
+                preview: "",
+                createdAt: secondPage ? 2 : 1,
+                updatedAt: secondPage ? 20 : 10,
+              }],
+              nextCursor: secondPage ? null : "page-2",
+            },
+          }));
+        }
+      });
+    });
+    const client = new AppServerClient({
+      transport: "websocket",
+      websocketUrl: `ws://127.0.0.1:${address.port}/rpc`,
+      command: "/command-must-not-be-spawned",
+    });
+    await client.initialize();
+    const runtime = new AppServerCodexRuntime(client);
+
+    const sessions = await runtime.listSessions({ workspacePath: "/work", archived: true });
+
+    expect(sessions.map((session) => session.threadId)).toEqual(["archived-1", "archived-2"]);
+    expect(requests).toEqual([
+      expect.objectContaining({ cwd: "/work", archived: true }),
+      expect.objectContaining({ cwd: "/work", archived: true, cursor: "page-2" }),
+    ]);
+    await client.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
   it("forwards commentary and final-answer phases from app-server", async () => {
     const fixture = fileURLToPath(new URL("./fixtures/mock-app-server.mjs", import.meta.url));
     const client = new AppServerClient({ command: process.execPath, args: [fixture] });

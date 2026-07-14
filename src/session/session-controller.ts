@@ -328,6 +328,21 @@ export class SessionController {
     const pageSize = 8;
     const allRows = this.#store.listSessions(this.#projectId, { limit: 100 })
       .filter((session) => this.#hostIdForThread(session.codexThreadId) === hostId);
+    const activeSessionId = this.#store.getActiveSessionId(chatId);
+    const activeSession = activeSessionId ? this.#store.getSession(activeSessionId) : null;
+    if (
+      !activeSession ||
+      activeSession.status !== "ACTIVE" ||
+      this.#hostIdForThread(activeSession.codexThreadId) !== hostId
+    ) {
+      const replacement = allRows[0];
+      if (replacement) {
+        this.#store.bindScope(chatId, replacement.sessionId, this.#now());
+      } else {
+        await this.#createAndActivateOnHost(chatId, false, hostId);
+        return;
+      }
+    }
     const rows = allRows.slice(page * pageSize, (page + 1) * pageSize + 1);
     await this.#feishu.sendCard(
       chatId,
@@ -347,7 +362,10 @@ export class SessionController {
   async #syncHostSessions(hostId = this.#executionHosts?.defaultHostId): Promise<void> {
     try {
       const workspacePath = hostId ? this.#workspacePathForHost(hostId) : this.#workspacePath;
-      const discovered = await this.#codex.listSessions({ workspacePath });
+      const [discovered, archived] = await Promise.all([
+        this.#codex.listSessions({ workspacePath }),
+        this.#codex.listSessions({ workspacePath, archived: true }),
+      ]);
       for (const thread of discovered) {
         this.#store.ensureDiscoveredSession({
           sessionId: this.#id(),
@@ -356,6 +374,18 @@ export class SessionController {
           title: thread.title,
           now: thread.updatedAt || thread.createdAt || this.#now(),
         });
+      }
+      for (const thread of archived) {
+        const session = this.#store.getSessionByCodexThreadId(thread.threadId);
+        if (
+          !session ||
+          session.projectId !== this.#projectId ||
+          session.status !== "ACTIVE" ||
+          this.#store.hasActiveRunForSession(session.sessionId)
+        ) {
+          continue;
+        }
+        this.#store.archiveSession(session.sessionId, this.#now());
       }
     } catch (error) {
       this.#onError(error instanceof Error ? error : new Error(String(error)));

@@ -13,6 +13,8 @@ readonly PROJECT_ID_FILE="${CONFIG_DIR}/project-id"
 readonly PROJECT_NAME_FILE="${CONFIG_DIR}/project-name"
 readonly MACBOOK_WORKSPACE_FILE="${CONFIG_DIR}/macbook-workspace-path"
 readonly MACBOOK_SSH_USER_FILE="${CONFIG_DIR}/macbook-ssh-user"
+readonly CODEX_SANDBOX_FILE="${CONFIG_DIR}/codex-sandbox"
+readonly CODEX_APPROVAL_POLICY_FILE="${CONFIG_DIR}/codex-approval-policy"
 
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -40,6 +42,26 @@ read_config "${PROJECT_ID_FILE}" "project-id"
 readonly PROJECT_ID="${REPLY}"
 read_config "${PROJECT_NAME_FILE}" "project-name"
 readonly PROJECT_NAME="${REPLY}"
+
+CODEX_SANDBOX="workspace-write"
+if [[ -f "${CODEX_SANDBOX_FILE}" ]]; then
+  read_config "${CODEX_SANDBOX_FILE}" "codex-sandbox"
+  CODEX_SANDBOX="${REPLY}"
+fi
+if [[ "${CODEX_SANDBOX}" != "workspace-write" && "${CODEX_SANDBOX}" != "danger-full-access" ]]; then
+  echo "codex-sandbox 只能是 workspace-write 或 danger-full-access。" >&2
+  exit 1
+fi
+
+CODEX_APPROVAL_POLICY="on-request"
+if [[ -f "${CODEX_APPROVAL_POLICY_FILE}" ]]; then
+  read_config "${CODEX_APPROVAL_POLICY_FILE}" "codex-approval-policy"
+  CODEX_APPROVAL_POLICY="${REPLY}"
+fi
+if [[ "${CODEX_APPROVAL_POLICY}" != "on-request" && "${CODEX_APPROVAL_POLICY}" != "never" ]]; then
+  echo "codex-approval-policy 只能是 on-request 或 never。" >&2
+  exit 1
+fi
 
 if [[ ! -d "${WORKSPACE_PATH}" ]]; then
   echo "配置的工作区不存在：${WORKSPACE_PATH}" >&2
@@ -93,6 +115,8 @@ export FEISHU_ALLOWED_OPEN_ID="${ALLOWED_OPEN_ID}"
 export XIAOWANG_WORKSPACE_PATH="${WORKSPACE_PATH:A}"
 export XIAOWANG_PROJECT_ID="${PROJECT_ID}"
 export XIAOWANG_PROJECT_NAME="${PROJECT_NAME}"
+export XIAOWANG_CODEX_SANDBOX="${CODEX_SANDBOX}"
+export XIAOWANG_CODEX_APPROVAL_POLICY="${CODEX_APPROVAL_POLICY}"
 if [[ -f "${MACBOOK_WORKSPACE_FILE}" ]]; then
   read_config "${MACBOOK_WORKSPACE_FILE}" "macbook-workspace-path"
   export XIAOWANG_MACBOOK_WORKSPACE_PATH="${REPLY}"

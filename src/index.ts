@@ -66,6 +66,7 @@ async function main(): Promise<void> {
         command: config.codexBin,
         hostId: "m4",
         approvals,
+        permissions: config.codexPermissions,
       });
     },
     onError: (error) => logRuntimeError("m4", error),
@@ -96,6 +97,7 @@ async function main(): Promise<void> {
             transport: "websocket",
             hostId: "macbook",
             approvals,
+            permissions: config.codexPermissions,
           });
         } catch (error) {
           process.stderr.write(`${JSON.stringify({
@@ -109,6 +111,7 @@ async function main(): Promise<void> {
             args: buildRemoteCodexStdioArgs(remoteInput),
             hostId: "macbook",
             approvals,
+            permissions: config.codexPermissions,
           });
         }
       },
@@ -206,6 +209,10 @@ async function connectAppServer(input: {
   transport?: "stdio" | "websocket";
   hostId: string;
   approvals: ApprovalController;
+  permissions: {
+    sandbox: "workspace-write" | "danger-full-access";
+    approvalPolicy: "on-request" | "never";
+  };
 }) {
   const client = new AppServerClient({
     command: input.command,
@@ -229,7 +236,7 @@ async function connectAppServer(input: {
     throw error;
   }
   return {
-    runtime: new AppServerCodexRuntime(client),
+    runtime: new AppServerCodexRuntime(client, input.permissions),
     close: () => client.close(),
     onExit: (listener: (event: { code: number | null; signal: NodeJS.Signals | null }) => void) => {
       client.once("exit", listener);

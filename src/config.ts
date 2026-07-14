@@ -8,6 +8,10 @@ export interface GatewayConfig {
   codexBin: string;
   statePath: string;
   hostId: string;
+  codexPermissions: {
+    sandbox: "workspace-write" | "danger-full-access";
+    approvalPolicy: "on-request" | "never";
+  };
   project: {
     projectId: string;
     displayName: string;
@@ -32,6 +36,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     codexBin: env.CODEX_BIN ?? "/Applications/Codex.app/Contents/Resources/codex",
     statePath: resolve(env.XIAOWANG_STATE_PATH ?? ".data/gateway.db"),
     hostId: env.XIAOWANG_HOST_ID ?? "unknown-host",
+    codexPermissions: {
+      sandbox: writableSandbox(env.XIAOWANG_CODEX_SANDBOX ?? "workspace-write"),
+      approvalPolicy: approvalPolicy(env.XIAOWANG_CODEX_APPROVAL_POLICY ?? "on-request"),
+    },
     project: {
       projectId: env.XIAOWANG_PROJECT_ID ?? "lark-codex-project",
       displayName: env.XIAOWANG_PROJECT_NAME ?? "Codex Project",
@@ -68,4 +76,14 @@ function port(value: string): number {
     throw new Error(`invalid SSH port: ${value}`);
   }
   return parsed;
+}
+
+function writableSandbox(value: string): "workspace-write" | "danger-full-access" {
+  if (value === "workspace-write" || value === "danger-full-access") return value;
+  throw new Error(`invalid Codex sandbox: ${value}`);
+}
+
+function approvalPolicy(value: string): "on-request" | "never" {
+  if (value === "on-request" || value === "never") return value;
+  throw new Error(`invalid Codex approval policy: ${value}`);
 }

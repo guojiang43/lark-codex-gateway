@@ -54,6 +54,30 @@ describe("loadConfig", () => {
     expect(config.project.displayName).toBe("Codex Project");
   });
 
+  it("loads an explicit full-access no-approval policy for a trusted deployment", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "lark-codex-"));
+    const env = baseEnv(workspace);
+    env.XIAOWANG_CODEX_SANDBOX = "danger-full-access";
+    env.XIAOWANG_CODEX_APPROVAL_POLICY = "never";
+
+    const config = loadConfig(env);
+
+    expect(config.codexPermissions).toEqual({
+      sandbox: "danger-full-access",
+      approvalPolicy: "never",
+    });
+  });
+
+  it("keeps public deployment defaults sandboxed and approval-gated", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "lark-codex-"));
+    const config = loadConfig(baseEnv(workspace));
+
+    expect(config.codexPermissions).toEqual({
+      sandbox: "workspace-write",
+      approvalPolicy: "on-request",
+    });
+  });
+
   it("requires an SSH user whenever a remote worker is configured", () => {
     const workspace = mkdtempSync(join(tmpdir(), "lark-codex-"));
     const env = baseEnv(workspace);

@@ -14,6 +14,8 @@ readonly PROJECT_ID_FILE="${CONFIG_DIR}/project-id"
 readonly PROJECT_NAME_FILE="${CONFIG_DIR}/project-name"
 readonly MACBOOK_WORKSPACE_FILE="${CONFIG_DIR}/macbook-workspace-path"
 readonly MACBOOK_SSH_USER_FILE="${CONFIG_DIR}/macbook-ssh-user"
+readonly CODEX_SANDBOX_FILE="${CONFIG_DIR}/codex-sandbox"
+readonly CODEX_APPROVAL_POLICY_FILE="${CONFIG_DIR}/codex-approval-policy"
 
 readonly WORKSPACE_INPUT="${1:-}"
 readonly PROJECT_ID_INPUT="${2:-}"
@@ -21,9 +23,19 @@ readonly PROJECT_NAME_INPUT="${3:-}"
 readonly ALLOWED_OPEN_ID_INPUT="${4:-}"
 readonly MACBOOK_WORKSPACE_INPUT="${5:-}"
 readonly MACBOOK_SSH_USER_INPUT="${6:-}"
+readonly CODEX_SANDBOX_INPUT="${7:-workspace-write}"
+readonly CODEX_APPROVAL_POLICY_INPUT="${8:-on-request}"
 
 if [[ -z "${WORKSPACE_INPUT}" || -z "${PROJECT_ID_INPUT}" || -z "${PROJECT_NAME_INPUT}" || -z "${ALLOWED_OPEN_ID_INPUT}" ]]; then
-  echo "用法：$0 /绝对路径/工作区 project-id 'Project Name' ou_用户ID [/远端/工作区 远端SSH用户名]" >&2
+  echo "用法：$0 /绝对路径/工作区 project-id 'Project Name' ou_用户ID [/远端/工作区 远端SSH用户名 [workspace-write|danger-full-access] [on-request|never]]" >&2
+  exit 1
+fi
+if [[ "${CODEX_SANDBOX_INPUT}" != "workspace-write" && "${CODEX_SANDBOX_INPUT}" != "danger-full-access" ]]; then
+  echo "Codex sandbox 只能是 workspace-write 或 danger-full-access。" >&2
+  exit 1
+fi
+if [[ "${CODEX_APPROVAL_POLICY_INPUT}" != "on-request" && "${CODEX_APPROVAL_POLICY_INPUT}" != "never" ]]; then
+  echo "Codex approval policy 只能是 on-request 或 never。" >&2
   exit 1
 fi
 if [[ ! -d "${WORKSPACE_INPUT}" ]]; then
@@ -62,6 +74,8 @@ write_config "${WORKSPACE_FILE}" "${WORKSPACE_INPUT:A}"
 write_config "${PROJECT_ID_FILE}" "${PROJECT_ID_INPUT}"
 write_config "${PROJECT_NAME_FILE}" "${PROJECT_NAME_INPUT}"
 write_config "${ALLOWED_OPEN_ID_FILE}" "${ALLOWED_OPEN_ID_INPUT}"
+write_config "${CODEX_SANDBOX_FILE}" "${CODEX_SANDBOX_INPUT}"
+write_config "${CODEX_APPROVAL_POLICY_FILE}" "${CODEX_APPROVAL_POLICY_INPUT}"
 
 if [[ -n "${MACBOOK_WORKSPACE_INPUT}" ]]; then
   write_config "${MACBOOK_WORKSPACE_FILE}" "${MACBOOK_WORKSPACE_INPUT}"

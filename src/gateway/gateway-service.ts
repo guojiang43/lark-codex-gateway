@@ -57,7 +57,7 @@ export interface CodexRuntime {
   startSession(input: { workspacePath: string; readOnly?: boolean }): Promise<string>;
   forkSession(input: { threadId: string; workspacePath: string; readOnly?: boolean }): Promise<string>;
   resumeSession(input: { threadId: string; workspacePath: string; readOnly?: boolean }): Promise<string>;
-  listSessions(input: { workspacePath: string }): Promise<Array<{
+  listSessions(input: { workspacePath: string; archived?: boolean }): Promise<Array<{
     threadId: string;
     title: string;
     createdAt: number;

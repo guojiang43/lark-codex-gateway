@@ -1,5 +1,7 @@
 # Lark Codex Gateway
 
+> Updated: 2026-07-14
+
 [![CI](https://github.com/guojiang43/lark-codex-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/guojiang43/lark-codex-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -39,7 +41,8 @@ Feishu/Lark <-> always-on gateway Mac <-> reverse SSH <-> worker Mac + Codex Des
 - App Secret 优先存储在 macOS 登录钥匙串；无法访问钥匙串时，只回退到权限为 `0600` 的本机配置文件；
 - Secret、token、私钥、Codex 认证状态、SQLite 与日志均不得提交到 Git；
 - project 路径由服务端固定，飞书消息不能指定任意本地路径；
-- 审批只支持“允许一次/拒绝”，project 外写入直接拒绝；
+- 默认权限策略为 `workspace-write + on-request`：审批只支持“允许一次/拒绝”，project 外写入直接拒绝；
+- 仅在受信任的个人部署中，可显式改为 `danger-full-access + never`。这会关闭逐次审批，并允许 Codex 访问工作区外文件与网络；
 - worker sshd 和反向端口只绑定 `127.0.0.1`，禁用密码、TTY 和端口转发；
 - 同一个飞书应用只能有一个活动网关消费者。
 
@@ -111,6 +114,20 @@ npm run build
   'worker_user'
 ```
 
+默认安装使用 `workspace-write + on-request`。如果网关仅服务于受信任用户，并且明确接受 Codex 无审批访问整台执行主机，可在最后追加权限参数：
+
+```bash
+./scripts/install-launch-agent.zsh \
+  '/absolute/path/on/gateway' \
+  'stable-project-id' \
+  'Project Display Name' \
+  'ou_ALLOWED_USER_ID' \
+  '/absolute/path/on/worker' \
+  'worker_user' \
+  'danger-full-access' \
+  'never'
+```
+
 安装脚本把非 Secret 配置写入 `~/.config/lark-codex-gateway` 的 `0600` 文件，基于当前 checkout 生成 LaunchAgent，并拒绝与前台网关进程并存。卸载不会删除数据库、日志或钥匙串项：
 
 ```bash
@@ -119,7 +136,7 @@ npm run build
 
 ## Session 可见性
 
-网关按目标 workspace 的绝对 `cwd` 从 Codex `thread/list` 同步 session。thread ID 归属于执行主机；两台 Mac 的本地 session 不会被伪装成同一个 session。跨机器继续工作应同步 project 文件并做显式 handoff，不应复制整个 `~/.codex`。
+网关按目标 workspace 的绝对 `cwd` 从 Codex `thread/list` 同步 session，并同时核对 Codex 的归档列表；已归档且没有活动 run 的 session 不再出现在切换列表中。thread ID 归属于执行主机；两台 Mac 的本地 session 不会被伪装成同一个 session。跨机器继续工作应同步 project 文件并做显式 handoff，不应复制整个 `~/.codex`。
 
 Codex Desktop 是否立即显示外部 turn，取决于 Desktop 与网关是否连接同一个 managed app-server daemon。完整的单/双机部署、验证和回滚流程见 [Agent Deployment Runbook](docs/agent-deployment-runbook.md)。
 

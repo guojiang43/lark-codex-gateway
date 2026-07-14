@@ -170,10 +170,16 @@ export class AppServerClient extends EventEmitter {
     return result.thread.id;
   }
 
-  async listThreads(input: { cwd: string; limit?: number }): Promise<{ threads: AppServerThreadSummary[] }> {
+  async listThreads(input: {
+    cwd: string;
+    limit?: number;
+    archived?: boolean;
+    cursor?: string;
+  }): Promise<{ threads: AppServerThreadSummary[]; nextCursor: string | null }> {
     const result = (await this.request("thread/list", {
       cwd: input.cwd,
-      archived: false,
+      archived: input.archived ?? false,
+      ...(input.cursor ? { cursor: input.cursor } : {}),
       limit: input.limit ?? 100,
       sortKey: "updated_at",
       sortDirection: "desc",
@@ -185,6 +191,7 @@ export class AppServerClient extends EventEmitter {
         createdAt?: unknown;
         updatedAt?: unknown;
       }>;
+      nextCursor?: unknown;
     };
     const threads = (result.data ?? []).flatMap((row): AppServerThreadSummary[] => {
       if (typeof row.id !== "string") return [];
@@ -196,7 +203,10 @@ export class AppServerClient extends EventEmitter {
         updatedAt: normalizeTimestamp(row.updatedAt),
       }];
     });
-    return { threads };
+    return {
+      threads,
+      nextCursor: typeof result.nextCursor === "string" ? result.nextCursor : null,
+    };
   }
 
   async forkThread(input: {

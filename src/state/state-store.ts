@@ -406,6 +406,18 @@ export class StateStore {
     if (result.changes !== 1) throw new Error(`active session not found: ${sessionId}`);
   }
 
+  hasActiveRunForSession(sessionId: string): boolean {
+    const row = this.#db
+      .prepare(`
+        SELECT 1 FROM runs
+        WHERE session_id = ?
+          AND state IN ('QUEUED', 'RUNNING', 'WAITING_APPROVAL')
+        LIMIT 1
+      `)
+      .get(sessionId);
+    return row !== undefined;
+  }
+
   claimInteractionEvent(input: {
     eventId: string;
     eventKind: "menu" | "card";

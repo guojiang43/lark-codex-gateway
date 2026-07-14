@@ -63,7 +63,7 @@ export class ManagedCodexRuntime implements CodexRuntime {
   resumeSession(input: { threadId: string; workspacePath: string; readOnly?: boolean }): Promise<string> {
     return this.#delegate.resumeSession(input);
   }
-  listSessions(input: { workspacePath: string }) {
+  listSessions(input: { workspacePath: string; archived?: boolean }) {
     return this.#delegate.listSessions(input);
   }
   runTurn(input: {

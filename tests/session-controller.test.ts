@@ -24,6 +24,7 @@ class FakeSessionFeishu implements SessionFeishuPort {
 class FakeSessionCodex implements CodexRuntime {
   startCalls = 0;
   discovered: Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }> = [];
+  archivedDiscovered: Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }> = [];
   readonly forkCalls: string[] = [];
   readonly interrupts: Array<{ threadId: string; turnId: string }> = [];
 
@@ -41,8 +42,8 @@ class FakeSessionCodex implements CodexRuntime {
     return input.threadId;
   }
 
-  async listSessions(): Promise<Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }>> {
-    return this.discovered;
+  async listSessions(input: { workspacePath: string; archived?: boolean }): Promise<Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }>> {
+    return input.archived ? this.archivedDiscovered : this.discovered;
   }
 
   async runTurn(): Promise<{ turnId: string; status: string }> {
@@ -249,6 +250,50 @@ describe("SessionController", () => {
     expect(store.listSessions("p", { limit: 20 }).map((session) => session.codexThreadId))
       .toContain("thread-existing-on-host");
     expect(JSON.stringify(feishu.cards[0]?.card)).toContain("已有 Codex Session");
+    store.close();
+  });
+
+  it("hides Codex-archived Sessions and rebinds the picker to an active Session", async () => {
+    const { controller, codex, feishu, store } = fixture();
+    codex.discovered = [{
+      threadId: "thread-b",
+      title: "任务 B",
+      createdAt: 2,
+      updatedAt: 20,
+    }];
+    codex.archivedDiscovered = [{
+      threadId: "thread-a",
+      title: "任务 A",
+      createdAt: 1,
+      updatedAt: 30,
+    }];
+
+    controller.handleMenu({ eventId: "menu-archived", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-a")?.status).toBe("ARCHIVED");
+    expect(store.getActiveSessionId("chat-1")).toBe("session-b");
+    const cardJson = JSON.stringify(feishu.cards[0]?.card);
+    expect(cardJson).not.toContain("任务 A");
+    expect(cardJson).toContain("任务 B");
+    store.close();
+  });
+
+  it("keeps a Codex-archived Session active locally while it still has an active run", async () => {
+    const { controller, codex, store } = fixture();
+    store.createRun({ runId: "run-active", eventId: "message-event", sessionId: "session-a", now: 5 });
+    codex.archivedDiscovered = [{
+      threadId: "thread-a",
+      title: "任务 A",
+      createdAt: 1,
+      updatedAt: 30,
+    }];
+
+    controller.handleMenu({ eventId: "menu-archived-running", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-a")?.status).toBe("ACTIVE");
+    expect(store.getActiveSessionId("chat-1")).toBe("session-a");
     store.close();
   });
 

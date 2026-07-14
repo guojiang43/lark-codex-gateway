@@ -8,16 +8,27 @@ import { randomUUID } from "node:crypto";
 
 export class AppServerCodexRuntime implements CodexRuntime {
   readonly #client: AppServerClient;
+  readonly #permissions: {
+    sandbox: "workspace-write" | "danger-full-access";
+    approvalPolicy: "on-request" | "never";
+  };
 
-  constructor(client: AppServerClient) {
+  constructor(
+    client: AppServerClient,
+    permissions: {
+      sandbox: "workspace-write" | "danger-full-access";
+      approvalPolicy: "on-request" | "never";
+    } = { sandbox: "workspace-write", approvalPolicy: "on-request" },
+  ) {
     this.#client = client;
+    this.#permissions = permissions;
   }
 
   startSession(input: { workspacePath: string; readOnly?: boolean }): Promise<string> {
     return this.#client.startThread({
       cwd: input.workspacePath,
-      sandbox: input.readOnly ? "read-only" : "workspace-write",
-      approvalPolicy: "on-request",
+      sandbox: input.readOnly ? "read-only" : this.#permissions.sandbox,
+      approvalPolicy: this.#permissions.approvalPolicy,
       ephemeral: false,
     });
   }
@@ -26,8 +37,8 @@ export class AppServerCodexRuntime implements CodexRuntime {
     return this.#client.forkThread({
       threadId: input.threadId,
       cwd: input.workspacePath,
-      sandbox: input.readOnly ? "read-only" : "workspace-write",
-      approvalPolicy: "on-request",
+      sandbox: input.readOnly ? "read-only" : this.#permissions.sandbox,
+      approvalPolicy: this.#permissions.approvalPolicy,
       ephemeral: false,
     });
   }
@@ -37,8 +48,8 @@ export class AppServerCodexRuntime implements CodexRuntime {
       return await this.#client.resumeThread({
         threadId: input.threadId,
         cwd: input.workspacePath,
-        sandbox: input.readOnly ? "read-only" : "workspace-write",
-        approvalPolicy: "on-request",
+        sandbox: input.readOnly ? "read-only" : this.#permissions.sandbox,
+        approvalPolicy: this.#permissions.approvalPolicy,
       });
     } catch (error) {
       if (
@@ -58,9 +69,26 @@ export class AppServerCodexRuntime implements CodexRuntime {
     }
   }
 
-  async listSessions(input: { workspacePath: string }) {
-    const result = await this.#client.listThreads({ cwd: input.workspacePath, limit: 100 });
-    return result.threads;
+  async listSessions(input: { workspacePath: string; archived?: boolean }) {
+    const sessions = [];
+    let cursor: string | undefined;
+    const seenCursors = new Set<string>();
+    for (let page = 0; page < 100; page += 1) {
+      const result = await this.#client.listThreads({
+        cwd: input.workspacePath,
+        limit: 100,
+        archived: input.archived ?? false,
+        ...(cursor ? { cursor } : {}),
+      });
+      sessions.push(...result.threads);
+      if (!result.nextCursor) return sessions;
+      if (seenCursors.has(result.nextCursor)) {
+        throw new Error("thread/list returned a repeated pagination cursor");
+      }
+      seenCursors.add(result.nextCursor);
+      cursor = result.nextCursor;
+    }
+    throw new Error("thread/list exceeded the pagination safety limit");
   }
 
   async runTurn(input: {
@@ -177,7 +205,7 @@ export class SwitchableCodexRuntime implements CodexRuntime {
     return this.#delegate.resumeSession(input);
   }
 
-  listSessions(input: { workspacePath: string }) {
+  listSessions(input: { workspacePath: string; archived?: boolean }) {
     return this.#delegate.listSessions(input);
   }
 

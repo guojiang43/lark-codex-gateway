@@ -38,6 +38,8 @@ describe("LaunchAgent packaging", () => {
     expect(install).toContain("project-name");
     expect(install).toContain("macbook-ssh-user");
     expect(install).toContain("project-id");
+    expect(install).toContain("codex-sandbox");
+    expect(install).toContain("codex-approval-policy");
     expect(install).toContain("plutil -remove ProgramArguments");
     expect(install).toContain("plutil -insert ProgramArguments -json");
     expect(install).toContain("plutil -replace WorkingDirectory");
@@ -61,6 +63,8 @@ describe("LaunchAgent packaging", () => {
     expect(runner).toContain("allowed-open-id");
     expect(runner).toContain("project-name");
     expect(runner).toContain("macbook-ssh-user");
+    expect(runner).toContain("XIAOWANG_CODEX_SANDBOX");
+    expect(runner).toContain("XIAOWANG_CODEX_APPROVAL_POLICY");
     expect(runner).toContain("/Applications/ChatGPT.app/Contents/Resources/codex");
     expect(runner).toContain("/Applications/Codex.app/Contents/Resources/codex");
     expect(runner).toContain("/usr/local/bin/node");
