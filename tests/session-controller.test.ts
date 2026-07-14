@@ -133,7 +133,7 @@ function fixture(options: { executionHosts?: FakeExecutionHosts } = {}) {
 }
 
 describe("SessionController", () => {
-  it("creates one new Codex thread from a menu event and ignores redelivery", async () => {
+  it("creates one pending Session from a menu event without spawning an empty Codex task", async () => {
     const { controller, store, codex } = fixture();
     const event = { eventId: "menu-1", operatorId: "allowed-user", eventKey: "new_session" };
 
@@ -141,10 +141,10 @@ describe("SessionController", () => {
     controller.handleMenu(event);
     await controller.waitForIdle();
 
-    expect(codex.startCalls).toBe(1);
+    expect(codex.startCalls).toBe(0);
     const active = store.getActiveSessionId("chat-1");
     expect(active).not.toBe("session-a");
-    expect(store.getSession(active ?? "")?.codexThreadId).toBe("thread-new-1");
+    expect(store.getSession(active ?? "")?.codexThreadId).toMatch(/^pending:/);
     store.close();
   });
 
@@ -162,7 +162,7 @@ describe("SessionController", () => {
     });
     await controller.waitForIdle();
 
-    expect(codex.startCalls).toBe(1);
+    expect(codex.startCalls).toBe(0);
     expect(store.listSessions("p", { limit: 20 }).filter((session) => session.title === "新会话"))
       .toHaveLength(1);
     store.close();
@@ -394,6 +394,26 @@ describe("SessionController", () => {
 
     expect(codex.archiveCalls).toEqual(["thread-a"]);
     expect(store.getSession("session-a")?.status).toBe("ARCHIVED");
+    store.close();
+  });
+
+  it("archives a pending Session locally without calling Codex for a nonexistent rollout", async () => {
+    const { controller, store, codex } = fixture();
+    controller.handleMenu({ eventId: "menu-pending-archive", operatorId: "allowed-user", eventKey: "new_session" });
+    await controller.waitForIdle();
+    const pendingSessionId = store.getActiveSessionId("chat-1");
+
+    controller.handleCardAction({
+      eventId: "card-archive-pending",
+      messageId: "card-message-archive-pending",
+      chatId: "chat-1",
+      operatorId: "allowed-user",
+      actionValue: { action: "session.archive", session_id: pendingSessionId },
+    });
+    await controller.waitForIdle();
+
+    expect(codex.archiveCalls).toEqual([]);
+    expect(store.getSession(pendingSessionId ?? "")?.status).toBe("ARCHIVED");
     store.close();
   });
 

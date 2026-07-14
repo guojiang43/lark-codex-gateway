@@ -13,6 +13,10 @@ import {
   renameSessionCard,
   sessionPickerCard,
 } from "./session-cards.js";
+import {
+  createPendingCodexThreadId,
+  isPendingCodexThreadId,
+} from "./pending-session.js";
 
 export interface SessionFeishuPort {
   sendCard(chatId: string, card: Record<string, unknown>): Promise<{ cardId: string; messageId: string }>;
@@ -250,13 +254,11 @@ export class SessionController {
       await this.#sendCurrent(chatId);
       return;
     }
-    const workspacePath = this.#workspacePathForHost(hostId);
-    const threadId = await this.#codex.startSession({ workspacePath, readOnly });
     const sessionId = this.#id();
     const now = this.#now();
     this.#store.createSession({
       sessionId,
-      codexThreadId: threadId,
+      codexThreadId: createPendingCodexThreadId(hostId, sessionId),
       projectId: this.#projectId,
       title: readOnly ? "只读分析" : "新会话",
       mode: readOnly ? "read_only" : "write",
@@ -268,6 +270,10 @@ export class SessionController {
 
   async #forkAndActivate(chatId: string): Promise<void> {
     const active = this.#activeSession(chatId);
+    if (isPendingCodexThreadId(active.codexThreadId)) {
+      await this.#sendCurrent(chatId);
+      return;
+    }
     const hostId = this.#hostIdForThread(active.codexThreadId);
     const threadId = await this.#codex.forkSession({
       threadId: active.codexThreadId,
@@ -314,7 +320,9 @@ export class SessionController {
     if (this.#store.hasActiveRunForSession(sessionId)) {
       throw new Error("session has an active run");
     }
-    await this.#codex.archiveSession(session.codexThreadId);
+    if (!isPendingCodexThreadId(session.codexThreadId)) {
+      await this.#codex.archiveSession(session.codexThreadId);
+    }
     this.#store.archiveSession(sessionId, this.#now());
     if (this.#store.getActiveSessionId(chatId) === sessionId) {
       const replacement = this.#store.listSessions(this.#projectId, { limit: 1 })[0];

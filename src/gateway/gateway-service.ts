@@ -7,6 +7,7 @@ import {
   ExecutionHostUnavailableError,
   type ExecutionHostDirectory,
 } from "../codex/host-routing-runtime.js";
+import { isPendingCodexThreadId } from "../session/pending-session.js";
 
 class RemoteAttachmentUnsupportedError extends Error {
   constructor() {
@@ -257,14 +258,25 @@ export class GatewayService {
           : []),
       ].join("\n\n");
 
-      const resumedThreadId = await this.#codex.resumeSession({
-        threadId,
-        workspacePath: this.#workspacePath,
-        readOnly: mode === "read_only",
-      });
-      if (resumedThreadId !== threadId) {
-        this.#store.replaceSessionThread(sessionId, resumedThreadId, this.#now());
-        threadId = resumedThreadId;
+      if (isPendingCodexThreadId(threadId)) {
+        const workspacePath = this.#executionHosts
+          ? this.#executionHosts.workspacePathForHost(this.#executionHosts.hostIdForThread(threadId))
+          : this.#workspacePath;
+        threadId = await this.#codex.startSession({
+          workspacePath,
+          readOnly: mode === "read_only",
+        });
+        this.#store.replaceSessionThread(sessionId, threadId, this.#now());
+      } else {
+        const resumedThreadId = await this.#codex.resumeSession({
+          threadId,
+          workspacePath: this.#workspacePath,
+          readOnly: mode === "read_only",
+        });
+        if (resumedThreadId !== threadId) {
+          this.#store.replaceSessionThread(sessionId, resumedThreadId, this.#now());
+          threadId = resumedThreadId;
+        }
       }
 
       const turn = await this.#codex.runTurn({

@@ -70,6 +70,8 @@ class FakeFeishu implements FeishuPort {
 
 class FakeCodex implements CodexRuntime {
   calls = 0;
+  startCalls = 0;
+  readonly started: Array<{ workspacePath: string; readOnly?: boolean }> = [];
   shouldFail = false;
   unavailableHost: string | undefined;
   resumeResult = "thread-1";
@@ -79,7 +81,9 @@ class FakeCodex implements CodexRuntime {
   lastThreadId: string | undefined;
   phasedOutput = false;
 
-  async startSession(): Promise<string> {
+  async startSession(input: { workspacePath: string; readOnly?: boolean }): Promise<string> {
+    this.startCalls += 1;
+    this.started.push(input);
     return "thread-created";
   }
 
@@ -244,6 +248,39 @@ describe("GatewayService", () => {
     }]);
     expect(codex.lastThreadId).toBe("thread-replacement");
     expect(store.getSession("s")?.codexThreadId).toBe("thread-replacement");
+    store.close();
+  });
+
+  it("materializes a pending Session exactly once when its first message arrives", async () => {
+    const { gateway, codex, store } = fixture({ threadId: "pending:s" });
+
+    const result = await gateway.handleMessage(message);
+
+    expect(result.kind).toBe("completed");
+    expect(codex.startCalls).toBe(1);
+    expect(codex.resumed).toEqual([]);
+    expect(codex.lastThreadId).toBe("thread-created");
+    expect(store.getSession("s")?.codexThreadId).toBe("thread-created");
+    store.close();
+  });
+
+  it("materializes a pending remote Session in its selected host workspace", async () => {
+    const executionHosts: ExecutionHostDirectory = {
+      defaultHostId: "m4",
+      listHosts: () => [],
+      hostIdForThread: (threadId) => threadId.startsWith("macbook::") ? "macbook" : "m4",
+      workspacePathForHost: (hostId) => `/work/${hostId}`,
+    };
+    const { gateway, codex, store } = fixture({
+      executionHosts,
+      threadId: "macbook::pending:s",
+    });
+
+    const result = await gateway.handleMessage(message);
+
+    expect(result.kind).toBe("completed");
+    expect(codex.started).toEqual([{ workspacePath: "/work/macbook", readOnly: false }]);
+    expect(codex.resumed).toEqual([]);
     store.close();
   });
 
