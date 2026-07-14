@@ -138,6 +138,12 @@ export class HostRoutingCodexRuntime implements CodexRuntime, ExecutionHostDirec
     return this.#encode(host.hostId, threadId);
   }
 
+  async archiveSession(threadId: string): Promise<void> {
+    const { host, rawThreadId } = this.#resolveThread(threadId);
+    this.#assertAvailable(host);
+    await host.runtime.archiveSession(rawThreadId);
+  }
+
   async listSessions(input: { workspacePath: string; archived?: boolean }) {
     const host = this.#hostForWorkspace(input.workspacePath);
     this.#assertAvailable(host);

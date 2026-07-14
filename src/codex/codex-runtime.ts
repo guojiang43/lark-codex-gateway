@@ -52,20 +52,21 @@ export class AppServerCodexRuntime implements CodexRuntime {
         approvalPolicy: this.#permissions.approvalPolicy,
       });
     } catch (error) {
-      if (
-        error instanceof AppServerRequestError &&
-        error.code === -32600 &&
-        (
-          error.serverMessage.startsWith("thread not loaded:") ||
-          error.serverMessage.startsWith("no rollout found for thread id ")
-        )
-      ) {
+      if (isMissingThreadError(error)) {
         return this.startSession({
           workspacePath: input.workspacePath,
           ...(input.readOnly !== undefined ? { readOnly: input.readOnly } : {}),
         });
       }
       throw error;
+    }
+  }
+
+  async archiveSession(threadId: string): Promise<void> {
+    try {
+      await this.#client.archiveThread(threadId);
+    } catch (error) {
+      if (!isMissingThreadError(error)) throw error;
     }
   }
 
@@ -138,6 +139,12 @@ export class AppServerCodexRuntime implements CodexRuntime {
   }
 }
 
+function isMissingThreadError(error: unknown): boolean {
+  if (!(error instanceof AppServerRequestError)) return false;
+  if (error.serverMessage.startsWith("no rollout found for thread id ")) return true;
+  return error.code === -32600 && error.serverMessage.startsWith("thread not loaded:");
+}
+
 export class UnavailableCodexRuntime implements CodexRuntime {
   async startSession(_input: { workspacePath: string; readOnly?: boolean }): Promise<string> {
     return `unavailable:${randomUUID()}`;
@@ -149,6 +156,10 @@ export class UnavailableCodexRuntime implements CodexRuntime {
 
   async resumeSession(input: { threadId: string }): Promise<string> {
     return input.threadId;
+  }
+
+  async archiveSession(): Promise<void> {
+    throw new Error("Codex app-server 当前不可用，无法归档 Session");
   }
 
   async listSessions(): Promise<[]> {
@@ -203,6 +214,10 @@ export class SwitchableCodexRuntime implements CodexRuntime {
 
   resumeSession(input: { threadId: string; workspacePath: string; readOnly?: boolean }): Promise<string> {
     return this.#delegate.resumeSession(input);
+  }
+
+  archiveSession(threadId: string): Promise<void> {
+    return this.#delegate.archiveSession(threadId);
   }
 
   listSessions(input: { workspacePath: string; archived?: boolean }) {

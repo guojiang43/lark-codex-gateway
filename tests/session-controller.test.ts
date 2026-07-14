@@ -26,6 +26,7 @@ class FakeSessionCodex implements CodexRuntime {
   discovered: Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }> = [];
   archivedDiscovered: Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }> = [];
   readonly forkCalls: string[] = [];
+  readonly archiveCalls: string[] = [];
   readonly interrupts: Array<{ threadId: string; turnId: string }> = [];
 
   async startSession(): Promise<string> {
@@ -40,6 +41,10 @@ class FakeSessionCodex implements CodexRuntime {
 
   async resumeSession(input: { threadId: string }): Promise<string> {
     return input.threadId;
+  }
+
+  async archiveSession(threadId: string): Promise<void> {
+    this.archiveCalls.push(threadId);
   }
 
   async listSessions(input: { workspacePath: string; archived?: boolean }): Promise<Array<{ threadId: string; title: string; createdAt: number; updatedAt: number }>> {
@@ -140,6 +145,26 @@ describe("SessionController", () => {
     const active = store.getActiveSessionId("chat-1");
     expect(active).not.toBe("session-a");
     expect(store.getSession(active ?? "")?.codexThreadId).toBe("thread-new-1");
+    store.close();
+  });
+
+  it("reuses the current unused placeholder Session across distinct new-session actions", async () => {
+    const { controller, store, codex } = fixture();
+
+    controller.handleMenu({ eventId: "menu-new-first", operatorId: "allowed-user", eventKey: "new_session" });
+    await controller.waitForIdle();
+    controller.handleCardAction({
+      eventId: "card-new-second",
+      messageId: "card-message-new",
+      chatId: "chat-1",
+      operatorId: "allowed-user",
+      actionValue: { action: "session.new" },
+    });
+    await controller.waitForIdle();
+
+    expect(codex.startCalls).toBe(1);
+    expect(store.listSessions("p", { limit: 20 }).filter((session) => session.title === "新会话"))
+      .toHaveLength(1);
     store.close();
   });
 
@@ -276,6 +301,117 @@ describe("SessionController", () => {
     const cardJson = JSON.stringify(feishu.cards[0]?.card);
     expect(cardJson).not.toContain("任务 A");
     expect(cardJson).toContain("任务 B");
+    store.close();
+  });
+
+  it("prunes an unbound unused placeholder Session that app-server no longer lists", async () => {
+    const executionHosts = new FakeExecutionHosts();
+    const { controller, store } = fixture({ executionHosts });
+    store.replaceSessionThread("session-a", "m4::thread-a", 10);
+    store.replaceSessionThread("session-b", "m4::thread-b", 11);
+    store.createSession({
+      sessionId: "session-orphan",
+      codexThreadId: "m4::thread-orphan",
+      projectId: "p",
+      title: "新会话",
+      now: 12,
+    });
+
+    controller.handleMenu({ eventId: "menu-prune-orphan", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-orphan")?.status).toBe("ARCHIVED");
+    store.close();
+  });
+
+  it("prunes the same orphan shape in single-host deployments", async () => {
+    const { controller, store } = fixture();
+    store.createSession({
+      sessionId: "session-orphan-single",
+      codexThreadId: "thread-orphan-single",
+      projectId: "p",
+      title: "新会话",
+      now: 12,
+    });
+
+    controller.handleMenu({ eventId: "menu-prune-single", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-orphan-single")?.status).toBe("ARCHIVED");
+    store.close();
+  });
+
+  it("keeps a missing placeholder Session when it has historical work", async () => {
+    const { controller, store } = fixture();
+    store.createSession({
+      sessionId: "session-with-history",
+      codexThreadId: "thread-with-history",
+      projectId: "p",
+      title: "新会话",
+      now: 12,
+    });
+    store.claimInboundEvent({ eventId: "history-event", messageId: "history-message", chatId: "history-chat", senderId: "allowed-user", receivedAt: 13 });
+    store.createRun({ runId: "history-run", eventId: "history-event", sessionId: "session-with-history", now: 14 });
+    store.transitionRun("history-run", "RUNNING", 15);
+    store.transitionRun("history-run", "COMPLETED", 16);
+
+    controller.handleMenu({ eventId: "menu-keep-history", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-with-history")?.status).toBe("ACTIVE");
+    store.close();
+  });
+
+  it("keeps a missing placeholder Session while another chat is bound to it", async () => {
+    const { controller, store } = fixture();
+    store.createSession({
+      sessionId: "session-bound-elsewhere",
+      codexThreadId: "thread-bound-elsewhere",
+      projectId: "p",
+      title: "新会话",
+      now: 12,
+    });
+    store.bindScope("other-chat", "session-bound-elsewhere", 13);
+
+    controller.handleMenu({ eventId: "menu-keep-bound", operatorId: "allowed-user", eventKey: "session_select" });
+    await controller.waitForIdle();
+
+    expect(store.getSession("session-bound-elsewhere")?.status).toBe("ACTIVE");
+    store.close();
+  });
+
+  it("archives the underlying Codex thread before hiding a Session locally", async () => {
+    const { controller, store, codex } = fixture();
+
+    controller.handleCardAction({
+      eventId: "card-archive-thread",
+      messageId: "card-message-archive",
+      chatId: "chat-1",
+      operatorId: "allowed-user",
+      actionValue: { action: "session.archive", session_id: "session-a" },
+    });
+    await controller.waitForIdle();
+
+    expect(codex.archiveCalls).toEqual(["thread-a"]);
+    expect(store.getSession("session-a")?.status).toBe("ARCHIVED");
+    store.close();
+  });
+
+  it("does not archive the Codex thread while the Session has an active run", async () => {
+    const { controller, store, codex } = fixture();
+    store.createRun({ runId: "run-active-archive", eventId: "message-event", sessionId: "session-a", now: 5 });
+
+    controller.handleCardAction({
+      eventId: "card-archive-running",
+      messageId: "card-message-archive-running",
+      chatId: "chat-1",
+      operatorId: "allowed-user",
+      actionValue: { action: "session.archive", session_id: "session-a" },
+    });
+    await controller.waitForIdle();
+
+    expect(codex.archiveCalls).toEqual([]);
+    expect(store.getSession("session-a")?.status).toBe("ACTIVE");
     store.close();
   });
 

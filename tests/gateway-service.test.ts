@@ -92,6 +92,8 @@ class FakeCodex implements CodexRuntime {
     return this.resumeResult;
   }
 
+  async archiveSession(): Promise<void> {}
+
   async listSessions(): Promise<[]> {
     return [];
   }

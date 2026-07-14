@@ -24,6 +24,10 @@ class FakeRuntime implements CodexRuntime {
     return input.threadId;
   }
 
+  async archiveSession(threadId: string): Promise<void> {
+    this.calls.push(`archive:${threadId}`);
+  }
+
   async listSessions(input: { workspacePath: string }) {
     this.calls.push(`list:${input.workspacePath}`);
     return [{ threadId: "thread-existing", title: "已有 Session", createdAt: 1, updatedAt: 2 }];
@@ -96,6 +100,14 @@ describe("HostRoutingCodexRuntime", () => {
     const { router, m4 } = fixture();
     await router.resumeSession({ threadId: "legacy-thread", workspacePath: "/ignored" });
     expect(m4.calls).toContain("resume:legacy-thread:/work/m4");
+  });
+
+  it("archives the raw thread on its owning host", async () => {
+    const { router, macbook } = fixture();
+
+    await router.archiveSession("macbook::thread-archive");
+
+    expect(macbook.calls).toContain("archive:thread-archive");
   });
 
   it("refuses MacBook execution while it is offline", async () => {

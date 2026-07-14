@@ -8,6 +8,7 @@ class FakeRuntime implements CodexRuntime {
   async startSession(): Promise<string> { return "thread-1"; }
   async forkSession(): Promise<string> { return "thread-fork"; }
   async resumeSession(input: { threadId: string }): Promise<string> { return input.threadId; }
+  async archiveSession(): Promise<void> {}
   async listSessions() { return []; }
   async runTurn() { return { turnId: "turn-1", status: "completed" }; }
   async interrupt(): Promise<void> {}

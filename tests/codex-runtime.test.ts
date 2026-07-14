@@ -8,13 +8,14 @@ import {
   SwitchableCodexRuntime,
   UnavailableCodexRuntime,
 } from "../src/codex/codex-runtime.js";
-import { AppServerClient } from "../src/codex/app-server-client.js";
+import { AppServerClient, AppServerRequestError } from "../src/codex/app-server-client.js";
 import type { CodexRuntime } from "../src/gateway/gateway-service.js";
 
 class HealthyRuntime implements CodexRuntime {
   async startSession(): Promise<string> { return "healthy-thread"; }
   async forkSession(): Promise<string> { return "healthy-fork"; }
   async resumeSession(input: { threadId: string }): Promise<string> { return input.threadId; }
+  async archiveSession(): Promise<void> {}
   async listSessions(): Promise<[]> { return []; }
   async runTurn(): Promise<{ turnId: string; status: string }> { return { turnId: "healthy-turn", status: "completed" }; }
   async interrupt(): Promise<void> {}
@@ -51,6 +52,46 @@ describe("UnavailableCodexRuntime", () => {
       expect.objectContaining({ method: "fork", input: expect.objectContaining({ sandbox: "danger-full-access", approvalPolicy: "never" }) }),
       expect.objectContaining({ method: "resume", input: expect.objectContaining({ sandbox: "danger-full-access", approvalPolicy: "never" }) }),
     ]);
+  });
+
+  it("archives a Session through the app-server thread lifecycle", async () => {
+    const archived: string[] = [];
+    const client = {
+      archiveThread: async (threadId: string) => { archived.push(threadId); },
+    } as unknown as AppServerClient;
+    const runtime = new AppServerCodexRuntime(client);
+
+    await runtime.archiveSession("thread-archive");
+
+    expect(archived).toEqual(["thread-archive"]);
+  });
+
+  it("treats a missing empty rollout as already archived", async () => {
+    const client = {
+      archiveThread: async () => {
+        throw new AppServerRequestError("thread/archive", {
+          code: -32600,
+          message: "no rollout found for thread id thread-empty",
+        });
+      },
+    } as unknown as AppServerClient;
+    const runtime = new AppServerCodexRuntime(client);
+
+    await expect(runtime.archiveSession("thread-empty")).resolves.toBeUndefined();
+  });
+
+  it("does not hide unrelated app-server archive failures", async () => {
+    const client = {
+      archiveThread: async () => {
+        throw new AppServerRequestError("thread/archive", {
+          code: -32600,
+          message: "archive storage unavailable",
+        });
+      },
+    } as unknown as AppServerClient;
+    const runtime = new AppServerCodexRuntime(client);
+
+    await expect(runtime.archiveSession("thread-error")).rejects.toThrow("archive storage unavailable");
   });
 
   it("paginates the complete archived thread list", async () => {

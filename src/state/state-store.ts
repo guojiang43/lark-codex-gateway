@@ -256,9 +256,15 @@ export class StateStore {
   ensureDiscoveredSession(session: SessionInput): SessionRecord {
     const existing = this.getSessionByCodexThreadId(session.codexThreadId);
     if (existing) {
+      const discoveredTitle = session.title.trim();
+      const title = isPlaceholderSessionTitle(existing.title) &&
+        discoveredTitle.length > 0 &&
+        !isSyntheticSessionTitle(discoveredTitle)
+        ? discoveredTitle
+        : existing.title;
       this.#db
-        .prepare("UPDATE sessions SET updated_at = MAX(updated_at, ?) WHERE session_id = ?")
-        .run(session.now, existing.sessionId);
+        .prepare("UPDATE sessions SET title = ?, updated_at = MAX(updated_at, ?) WHERE session_id = ?")
+        .run(title, session.now, existing.sessionId);
       return this.getSession(existing.sessionId)!;
     }
     this.createSession(session);
@@ -414,6 +420,20 @@ export class StateStore {
           AND state IN ('QUEUED', 'RUNNING', 'WAITING_APPROVAL')
         LIMIT 1
       `)
+      .get(sessionId);
+    return row !== undefined;
+  }
+
+  hasAnyRunForSession(sessionId: string): boolean {
+    const row = this.#db
+      .prepare("SELECT 1 FROM runs WHERE session_id = ? LIMIT 1")
+      .get(sessionId);
+    return row !== undefined;
+  }
+
+  isSessionBound(sessionId: string): boolean {
+    const row = this.#db
+      .prepare("SELECT 1 FROM bindings WHERE active_session_id = ? LIMIT 1")
       .get(sessionId);
     return row !== undefined;
   }
@@ -799,6 +819,14 @@ export class StateStore {
   close(): void {
     this.#db.close();
   }
+}
+
+function isPlaceholderSessionTitle(title: string): boolean {
+  return title === "新会话" || title === "只读分析";
+}
+
+function isSyntheticSessionTitle(title: string): boolean {
+  return isPlaceholderSessionTitle(title) || title.startsWith("Codex Session · ");
 }
 
 function mapRun(row: RunRow): RunRecord {

@@ -170,6 +170,10 @@ export class AppServerClient extends EventEmitter {
     return result.thread.id;
   }
 
+  async archiveThread(threadId: string): Promise<void> {
+    await this.request("thread/archive", { threadId });
+  }
+
   async listThreads(input: {
     cwd: string;
     limit?: number;

@@ -238,6 +238,18 @@ export class SessionController {
   }
 
   async #createAndActivateOnHost(chatId: string, readOnly: boolean, hostId: string): Promise<void> {
+    const activeSessionId = this.#store.getActiveSessionId(chatId);
+    const activeSession = activeSessionId ? this.#store.getSession(activeSessionId) : null;
+    if (
+      activeSession?.status === "ACTIVE" &&
+      activeSession.mode === (readOnly ? "read_only" : "write") &&
+      this.#hostIdForThread(activeSession.codexThreadId) === hostId &&
+      isPlaceholderSessionTitle(activeSession.title) &&
+      !this.#store.hasAnyRunForSession(activeSession.sessionId)
+    ) {
+      await this.#sendCurrent(chatId);
+      return;
+    }
     const workspacePath = this.#workspacePathForHost(hostId);
     const threadId = await this.#codex.startSession({ workspacePath, readOnly });
     const sessionId = this.#id();
@@ -299,6 +311,10 @@ export class SessionController {
     if (!session || session.projectId !== this.#projectId || session.status !== "ACTIVE") {
       throw new Error("session is unavailable");
     }
+    if (this.#store.hasActiveRunForSession(sessionId)) {
+      throw new Error("session has an active run");
+    }
+    await this.#codex.archiveSession(session.codexThreadId);
     this.#store.archiveSession(sessionId, this.#now());
     if (this.#store.getActiveSessionId(chatId) === sessionId) {
       const replacement = this.#store.listSessions(this.#projectId, { limit: 1 })[0];
@@ -383,6 +399,23 @@ export class SessionController {
           session.projectId !== this.#projectId ||
           session.status !== "ACTIVE" ||
           this.#store.hasActiveRunForSession(session.sessionId)
+        ) {
+          continue;
+        }
+        this.#store.archiveSession(session.sessionId, this.#now());
+      }
+      const knownThreadIds = new Set([
+        ...discovered.map((thread) => thread.threadId),
+        ...archived.map((thread) => thread.threadId),
+      ]);
+      const localSessions = this.#store.listSessions(this.#projectId, { limit: 100 })
+        .filter((session) => this.#hostIdForThread(session.codexThreadId) === hostId);
+      for (const session of localSessions) {
+        if (
+          knownThreadIds.has(session.codexThreadId) ||
+          !isPlaceholderSessionTitle(session.title) ||
+          this.#store.hasAnyRunForSession(session.sessionId) ||
+          this.#store.isSessionBound(session.sessionId)
         ) {
           continue;
         }
@@ -530,6 +563,10 @@ function pageValue(value: unknown): number {
     throw new Error("invalid page");
   }
   return page;
+}
+
+function isPlaceholderSessionTitle(title: string): boolean {
+  return title === "新会话" || title === "只读分析";
 }
 
 function infoToast(content: string): CallbackResponse {
