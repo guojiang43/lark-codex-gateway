@@ -58,17 +58,21 @@ if [[ ! "${PATH_TOKEN}" =~ '^[a-f0-9]{64}$' ]]; then
   exit 1
 fi
 readonly DESKTOP_WS_URL="ws://127.0.0.1:48123/${PATH_TOKEN}"
+readonly PROXY_ARGUMENTS_JSON="$("${NODE_BIN}" -e '
+  process.stdout.write(JSON.stringify(process.argv.slice(1)));
+' "${NODE_BIN}" "${INSTALLED_ENTRYPOINT}" --port 48123 --token-file "${TOKEN_FILE}")"
+readonly ENV_ARGUMENTS_JSON="$("${NODE_BIN}" -e '
+  process.stdout.write(JSON.stringify(process.argv.slice(1)));
+' /bin/launchctl setenv CODEX_APP_SERVER_WS_URL "${DESKTOP_WS_URL}")"
 
 /usr/bin/install -m 600 "${PROXY_SOURCE}" "${PROXY_TARGET}"
-/usr/bin/plutil -replace ProgramArguments.0 -string "${NODE_BIN}" "${PROXY_TARGET}"
-/usr/bin/plutil -replace ProgramArguments.1 -string "${INSTALLED_ENTRYPOINT}" "${PROXY_TARGET}"
-/usr/bin/plutil -replace ProgramArguments.5 -string "${TOKEN_FILE}" "${PROXY_TARGET}"
+/usr/bin/plutil -replace ProgramArguments -json "${PROXY_ARGUMENTS_JSON}" "${PROXY_TARGET}"
 /usr/bin/plutil -replace StandardOutPath -string "${CONFIG_DIR}/desktop-proxy.stdout.log" "${PROXY_TARGET}"
 /usr/bin/plutil -replace StandardErrorPath -string "${CONFIG_DIR}/desktop-proxy.stderr.log" "${PROXY_TARGET}"
 /usr/bin/plutil -lint "${PROXY_TARGET}"
 
 /usr/bin/install -m 600 "${ENV_SOURCE}" "${ENV_TARGET}"
-/usr/bin/plutil -replace ProgramArguments.3 -string "${DESKTOP_WS_URL}" "${ENV_TARGET}"
+/usr/bin/plutil -replace ProgramArguments -json "${ENV_ARGUMENTS_JSON}" "${ENV_TARGET}"
 /usr/bin/plutil -lint "${ENV_TARGET}"
 
 /bin/launchctl bootout "${DOMAIN}/${PROXY_LABEL}" 2>/dev/null || true

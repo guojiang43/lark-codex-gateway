@@ -72,6 +72,8 @@ describe("MacBook worker SSH tunnel packaging", () => {
     expect(envPlist).toContain("CODEX_APP_SERVER_WS_URL");
     expect(installer).toContain("daemon-loopback-proxy.js");
     expect(installer).toContain("desktop-proxy-token");
+    expect(installer).toContain("-replace ProgramArguments -json");
+    expect(installer).not.toMatch(/-replace ProgramArguments\.\d/);
     expect(proxyPlist).toContain("__TOKEN_FILE__");
     expect(uninstaller).toContain("unsetenv CODEX_APP_SERVER_WS_URL");
     for (const content of [installer, proxyPlist, envPlist]) {
