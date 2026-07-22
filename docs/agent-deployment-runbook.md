@@ -321,7 +321,7 @@ Required evidence:
 
 ## 13. Phase 7 — Desktop shared-control gate
 
-The currently verified Desktop build can discover the managed daemon through this internal variable at startup:
+The currently verified Desktop build has been observed to discover the managed daemon through this internal variable at startup:
 
 ```bash
 launchctl setenv CODEX_APP_SERVER_USE_LOCAL_DAEMON 1
@@ -335,7 +335,9 @@ For realtime-required deployments, install the explicit loopback bridge after `n
 ./scripts/install-desktop-daemon-proxy.zsh
 ```
 
-It binds `127.0.0.1:48123` only, validates a per-machine random path token stored in a 0600 file, forwards authorized WebSocket traffic to `~/.codex/app-server-control/app-server-control.sock`, and persists the protected `CODEX_APP_SERVER_WS_URL` through a mode-0600 user LaunchAgent. The token is local access-control material: never print or commit it. The installer copies its standalone built entrypoint into the 0700 worker config directory so the service does not depend on a disposable worktree.
+The bridge installs three protected user LaunchAgents: the loopback proxy, a short-lived environment helper, and a daemon keeper. It binds `127.0.0.1:48123` only, validates a per-machine random path token stored in a 0600 file, and forwards authorized WebSocket traffic to `~/.codex/app-server-control/app-server-control.sock`. The keeper runs the official standalone `~/.local/bin/codex app-server daemon start` at load and every 60 seconds, so a standalone upgrade cannot leave the managed daemon without a launchd owner. `daemon start` is the required idempotent operation: it returns `alreadyRunning` without changing the daemon PID when healthy, while `daemon bootstrap` may wait on the existing management lock and must not be used as a periodic health command. The keeper is an interval one-shot job, not a `KeepAlive` loop.
+
+The environment plist contains only `/bin/zsh` plus a protected helper path; it contains neither the token nor a WebSocket URL. Every install rotates the token, then the mode-0700 helper reads and validates the new 0600 token file at execution time and sets `CODEX_APP_SERVER_WS_URL`. The token is local access-control material: never print or commit it. The installer also copies the built proxy entrypoint into that 0700 directory so both services do not depend on a disposable worktree. Because installation rotates the explicit WebSocket path, a complete Desktop quit/reopen is mandatory after every install.
 
 After installation, completely quit and reopen Desktop, then run:
 
@@ -343,9 +345,9 @@ After installation, completely quit and reopen Desktop, then run:
 ./scripts/check-desktop-daemon-proxy.zsh
 ```
 
-The check must report `desktop_realtime=healthy`, Desktop must have no child `app-server --stdio`, and `lsof -U` must show both Desktop and the worker proxy connected to the managed daemon socket.
+The check must report `desktop_realtime=healthy`, verify that the keeper is loaded and the managed daemon is running with a socket path and compatible managed/CLI/app-server versions, and confirm the latest local Desktop WebSocket connection state is initialized/connected. Desktop must have no child `app-server --stdio`; use `lsof -U` as additional runtime evidence that Desktop and the worker proxy connect to the managed daemon socket.
 
-This variable is not a documented stable Codex setting. The agent must:
+This is an internal Desktop variable, not a documented stable Codex setting. The agent must:
 
 1. state the compatibility risk;
 2. obtain permission before installing the LaunchAgent;
@@ -413,6 +415,8 @@ Desktop daemon preference:
 ./scripts/uninstall-desktop-daemon-proxy.zsh
 ```
 
+This boots out and removes all three bridge LaunchAgents plus the installed environment helper and token. It does not stop the managed daemon; stop that separately only after confirming no client needs it.
+
 Managed daemon, only when no client needs it:
 
 ```bash
@@ -436,6 +440,7 @@ Services installed or changed:
 Verification commands and actual results:
 Real Feishu event/run/turn/thread evidence:
 Desktop realtime evidence:
+Managed daemon/keeper evidence:
 Residual risks:
 Rollback commands:
 Next user action:

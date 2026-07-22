@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lark-codex-daemon-keeper</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CODEX_BIN__</string>
+    <string>app-server</string>
+    <string>daemon</string>
+    <string>start</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>__CONFIG_DIR__/codex-daemon-keeper.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>__CONFIG_DIR__/codex-daemon-keeper.stderr.log</string>
+</dict>
+</plist>

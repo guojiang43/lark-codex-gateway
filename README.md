@@ -1,6 +1,6 @@
 # Lark Codex Gateway
 
-> Updated: 2026-07-14
+> Updated: 2026-07-22
 
 [![CI](https://github.com/guojiang43/lark-codex-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/guojiang43/lark-codex-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -139,6 +139,12 @@ npm run build
 网关按目标 workspace 的绝对 `cwd` 从 Codex `thread/list` 同步 session，并同时核对 Codex 的归档列表；已归档且没有活动 run 的 session 不再出现在切换列表中。thread ID 归属于执行主机；两台 Mac 的本地 session 不会被伪装成同一个 session。跨机器继续工作应同步 project 文件并做显式 handoff，不应复制整个 `~/.codex`。
 
 Codex Desktop 是否立即显示外部 turn，取决于 Desktop 与网关是否连接同一个 managed app-server daemon。实时同步部署使用 loopback-only WebSocket bridge 显式连接该 daemon，避免 Desktop 启动探测瞬时失败后静默降级到独立 stdio。完整的安装、验证和回滚流程见 [Agent Deployment Runbook](docs/agent-deployment-runbook.md)。
+
+## 已知问题
+
+手机 Remote Control 打开“新任务”后，如果尚未发送消息就直接退出，Desktop 侧可能留下一个空任务，且归档时报 `no rollout found` 或 `Archive skipped because thread has no active rollout`。这类条目没有真正的 `thread/start`/rollout，与 lark-codex 网关创建 session 的链路无关；上游跟踪见 [openai/codex#29868](https://github.com/openai/codex/issues/29868)。截至 2026-07-22，本机验证的 Desktop build 5650 仍包含相同的归档回退逻辑。
+
+临时规避方式是不要在手机端创建任务后未发送就退出；若已出现，先更新 Desktop，完全退出并重新打开后再尝试归档。仍无法清理时，应收集脱敏日志并向上游报告，不要伪造 rollout 文件或手工删除 SQLite 记录。
 
 ## 开发与验证
 
