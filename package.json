@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "1.70.0",
-    "ws": "8.21.0"
+    "ws": "8.21.1"
   },
   "overrides": {
     "axios": "1.18.1"
