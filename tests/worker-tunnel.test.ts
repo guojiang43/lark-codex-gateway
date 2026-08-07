@@ -124,7 +124,9 @@ describe("MacBook worker SSH tunnel packaging", () => {
     expect(keeperPlist).not.toContain("<key>KeepAlive</key>");
     expect(keeperPlist).toContain("__CONFIG_DIR__/codex-daemon-keeper.stdout.log");
     expect(uninstaller).toContain("unsetenv CODEX_APP_SERVER_WS_URL");
+    expect(uninstaller).toContain("unsetenv CODEX_APP_SERVER_USE_LOCAL_DAEMON");
     expect(uninstaller).toContain("com.lark-codex-daemon-keeper");
+    expect(uninstaller).toContain("com.john.codex-desktop-daemon-env");
     expect(uninstaller).toContain("set-desktop-daemon-proxy-env.zsh");
 
     expect(checker).toContain("com.lark-codex-daemon-keeper");
